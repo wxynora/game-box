@@ -22,19 +22,19 @@ def get_tools_for_inject() -> list[dict[str, Any]]:
             "function": {
                 "name": TOOL_NAME,
                 "description": (
-                    "Run one Sese Board Game command and return the board, public state, pending event, and player-facing text. "
-                    "Useful commands: status, new_game, roll, roll 3, submit <text>, approve, reject, choose <id>, pass, end_game."
+                    "执行涩涩走格棋的一步命令，并返回棋盘、公开状态、待处理事件和玩家可读文本。"
+                    "可用命令：status、new_game、roll、roll 3、submit <内容>、approve、reject、choose <选项id>、pass、end_game。"
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "command": {
                             "type": "string",
-                            "description": "Game command, for example: status, roll, submit <text>, approve, choose add_prop, pass, new_game.",
+                            "description": "游戏命令，例如：status、roll、submit <内容>、approve、choose add_prop、pass、new_game。",
                         },
                         "save_path": {
                             "type": "string",
-                            "description": "Optional JSON save path. Defaults to SESE_BOARD_GAME_SAVE or .sese_board_game.json.",
+                            "description": "可选 JSON 存档路径。默认使用 SESE_BOARD_GAME_SAVE 或当前目录下的 .sese_board_game.json。",
                         },
                     },
                     "required": ["command"],

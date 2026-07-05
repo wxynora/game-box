@@ -363,7 +363,7 @@ SLOTS: dict[str, dict[str, Any]] = {
 
 REWARD_CARD_PASS = "pass"
 REWARD_CARD_LABELS = {
-    REWARD_CARD_PASS: "Pass Card",
+    REWARD_CARD_PASS: "Pass 卡",
 }
 
 
@@ -414,90 +414,90 @@ REVIEW_PENALTY_CARDS: tuple[dict[str, Any], ...] = (
 CHOICE_PENALTY_CARDS: tuple[dict[str, Any], ...] = (
     {
         "id": "prop_or_rule",
-        "name": "Prop or Rule",
+        "name": "道具还是限制",
         "type": "choice",
-        "prompt": "Choose one penalty.",
+        "prompt": "选择一项惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "add_prop", "label": "Add a prop penalty", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
-            {"id": "add_limit", "label": "Add a rule", "effect": {"kind": "add_status", "slot": "limit", "duration_type": "until_clear"}},
+            {"id": "add_prop", "label": "新增一个道具惩罚", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
+            {"id": "add_limit", "label": "新增一条限制", "effect": {"kind": "add_status", "slot": "limit", "duration_type": "until_clear"}},
         ),
     },
     {
         "id": "new_or_upgrade_prop",
-        "name": "New or Upgrade",
+        "name": "加新还是升档",
         "type": "choice",
-        "prompt": "Choose one prop penalty.",
+        "prompt": "选择一项道具惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "add_prop", "label": "Add a prop penalty", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
-            {"id": "upgrade_prop_level", "label": "Increase an existing prop penalty by one level", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
+            {"id": "add_prop", "label": "新增一个道具惩罚", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
+            {"id": "upgrade_prop_level", "label": "现有道具惩罚档位上调一级", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
         ),
     },
     {
         "id": "back_or_prop",
-        "name": "Back or Prop",
+        "name": "退格还是上道具",
         "type": "choice",
-        "prompt": "Choose one penalty.",
+        "prompt": "选择一项惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "move_back_2", "label": "Move back 2 cells", "effect": {"kind": "move", "steps": -2}},
-            {"id": "add_prop", "label": "Add a prop penalty", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
+            {"id": "move_back_2", "label": "后退 2 格", "effect": {"kind": "move", "steps": -2}},
+            {"id": "add_prop", "label": "新增一个道具惩罚", "effect": {"kind": "add_status", "slot": "prop", "duration_type": "until_clear"}},
         ),
     },
     {
         "id": "lose_action_or_upgrade",
-        "name": "Pause or Upgrade",
+        "name": "停步还是升档",
         "type": "choice",
-        "prompt": "Choose one penalty.",
+        "prompt": "选择一项惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "lose_action", "label": "Lose 1 action", "effect": {"kind": "add_block", "slot": "prop", "actions": 1}},
-            {"id": "upgrade_prop_level", "label": "Increase an existing prop penalty by one level", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
+            {"id": "lose_action", "label": "失去 1 次行动权", "effect": {"kind": "add_block", "slot": "prop", "actions": 1}},
+            {"id": "upgrade_prop_level", "label": "现有道具惩罚档位上调一级", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
         ),
     },
     {
         "id": "pose_or_place",
-        "name": "Pose or Place",
+        "name": "姿势还是地点",
         "type": "choice",
-        "prompt": "Choose one state penalty.",
+        "prompt": "选择一项状态惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "add_pose", "label": "Add a pose state", "effect": {"kind": "add_status", "slot": "pose", "duration_type": "until_finish"}},
-            {"id": "add_place", "label": "Add a place state", "effect": {"kind": "add_status", "slot": "place", "duration_type": "until_clear"}},
+            {"id": "add_pose", "label": "新增一个姿势状态", "effect": {"kind": "add_status", "slot": "pose", "duration_type": "until_finish"}},
+            {"id": "add_place", "label": "新增一个地点状态", "effect": {"kind": "add_status", "slot": "place", "duration_type": "until_clear"}},
         ),
     },
     {
         "id": "rule_or_task",
-        "name": "Rule or Task",
+        "name": "限制还是任务",
         "type": "choice",
-        "prompt": "Choose one penalty.",
+        "prompt": "选择一项惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "add_limit", "label": "Add a rule", "effect": {"kind": "add_status", "slot": "limit", "duration_type": "until_clear"}},
-            {"id": "add_task", "label": "Add a task state", "effect": {"kind": "add_status", "slot": "task", "duration_type": "until_clear"}},
+            {"id": "add_limit", "label": "新增一条限制", "effect": {"kind": "add_status", "slot": "limit", "duration_type": "until_clear"}},
+            {"id": "add_task", "label": "新增一个任务状态", "effect": {"kind": "add_status", "slot": "task", "duration_type": "until_clear"}},
         ),
     },
     {
         "id": "heavy_prop_or_back",
-        "name": "Heavy Choice",
+        "name": "重罚二选一",
         "type": "choice",
-        "prompt": "Choose one heavier penalty.",
+        "prompt": "选择一项重惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "add_prop_and_lose_action", "label": "Add a prop penalty and lose 1 action", "effect": {"kind": "add_status_and_block", "slot": "prop", "actions": 1}},
-            {"id": "move_back_3", "label": "Move back 3 cells", "effect": {"kind": "move", "steps": -3}},
+            {"id": "add_prop_and_lose_action", "label": "新增道具惩罚并失去 1 次行动权", "effect": {"kind": "add_status_and_block", "slot": "prop", "actions": 1}},
+            {"id": "move_back_3", "label": "后退 3 格", "effect": {"kind": "move", "steps": -3}},
         ),
     },
     {
         "id": "upgrade_or_pose",
-        "name": "Upgrade or Pose",
+        "name": "升档还是姿势",
         "type": "choice",
-        "prompt": "Choose one penalty.",
+        "prompt": "选择一项惩罚。",
         "pass_allowed": True,
         "choices": (
-            {"id": "upgrade_prop_level", "label": "Increase an existing prop penalty by one level", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
-            {"id": "add_pose", "label": "Add a pose state", "effect": {"kind": "add_status", "slot": "pose", "duration_type": "until_finish"}},
+            {"id": "upgrade_prop_level", "label": "现有道具惩罚档位上调一级", "requires": {"status_slot": "prop"}, "effect": {"kind": "upgrade_status_level", "slot": "prop", "delta": 1}},
+            {"id": "add_pose", "label": "新增一个姿势状态", "effect": {"kind": "add_status", "slot": "pose", "duration_type": "until_finish"}},
         ),
     },
 )

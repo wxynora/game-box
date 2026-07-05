@@ -267,7 +267,7 @@ export function SeseBoardGame({
       try {
         const result = await executeCommand(command);
         setPayload(result);
-        const diceMatch = String(result.text || "").match(/rolled\s+(\d+)/i);
+        const diceMatch = String(result.text || "").match(/(?:掷出|rolled)\s+(\d+)/i);
         if (diceMatch) setDice(Number(diceMatch[1] || 1));
         if (!result.ok && result.text) {
           appendMessage(setMessages, "system", result.text);
@@ -706,7 +706,7 @@ function recentLine(text: string | undefined, fallback: string) {
   const line = String(text || "")
     .split(/\r?\n/)
     .map((item) => item.trim())
-    .find((item) => item && !item.startsWith("Progress:"));
+    .find((item) => item && !item.startsWith("Progress:") && !item.startsWith("进度："));
   return line || fallback;
 }
 

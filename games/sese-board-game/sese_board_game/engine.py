@@ -32,8 +32,8 @@ SCHEMA_VERSION = 1
 DEFAULT_BOARD_SIZE = 36
 DEFAULT_SAVE_PATH = Path(os.environ.get("SESE_BOARD_GAME_SAVE", ".sese_board_game.json"))
 ACTORS = ("player", "ai")
-DEFAULT_LABELS = {"player": "Player", "ai": "AI"}
-COMMAND_HINT = "Commands: status, new_game, roll, roll 3, submit <text>, approve, reject [reason], choose <id>, pass, end_game"
+DEFAULT_LABELS = {"player": "你", "ai": "对方"}
+COMMAND_HINT = "可用命令：status / new_game / roll / roll 3 / submit <内容> / approve / reject [理由] / choose <选项> / pass / end_game"
 
 _PROCESS_LOCKS: dict[str, threading.Lock] = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
@@ -73,32 +73,32 @@ def build_cell_events(board_size: int = DEFAULT_BOARD_SIZE) -> list[dict[str, An
     """
 
     events: list[dict[str, Any]] = [
-        _cell(1, "start", "Start"),
-        _cell(3, "reward", "Pass Card", reward=REWARD_CARD_PASS),
-        _cell(4, "add_status", "Place State", slot="place", duration_type="until_clear"),
-        _cell(6, "move", "Move Back", steps=-2),
-        _cell(8, "clear_status", "Clear State"),
-        _cell(9, "penalty_choice", "Penalty Choice"),
-        _cell(11, "penalty_review", "Review Task"),
-        _cell(12, "move_reward", "Move Forward", steps=2, reward=REWARD_CARD_PASS),
-        _cell(14, "extend_status", "Extend State"),
-        _cell(15, "swap_positions", "Swap Positions"),
-        _cell(17, "block", "Prop Pause", slot="prop", actions=2),
-        _cell(18, "replace_status", "Replace Place", slot="place", duration_type="until_clear"),
-        _cell(20, "penalty_choice", "Penalty Choice"),
-        _cell(21, "move", "Move Back", steps=-1),
-        _cell(23, "clear_reward", "Clear + Reward", reward=REWARD_CARD_PASS),
-        _cell(24, "add_status", "Pose State", slot="pose", duration_type="until_finish"),
-        _cell(26, "penalty_review", "Review Task"),
-        _cell(27, "reward", "Pass Card", reward=REWARD_CARD_PASS),
-        _cell(29, "extend_status", "Extend State"),
-        _cell(30, "penalty_choice", "Penalty Choice"),
-        _cell(31, "move", "Move Back", steps=-2),
-        _cell(33, "penalty_review", "Review Task"),
-        _cell(34, "block", "Prop Pause", slot="prop", actions=1),
-        _cell(35, "clear_status", "Clear State"),
+        _cell(1, "start", "起点"),
+        _cell(3, "reward", "奖励抽卡", reward=REWARD_CARD_PASS),
+        _cell(4, "add_status", "地点追加", slot="place", duration_type="until_clear"),
+        _cell(6, "move", "限制拖回", steps=-2),
+        _cell(8, "clear_status", "解除状态"),
+        _cell(9, "penalty_choice", "选择惩罚"),
+        _cell(11, "penalty_review", "验收任务"),
+        _cell(12, "move_reward", "奖励前进", steps=2, reward=REWARD_CARD_PASS),
+        _cell(14, "extend_status", "状态延长"),
+        _cell(15, "swap_positions", "位置交换"),
+        _cell(17, "block", "道具停步", slot="prop", actions=2),
+        _cell(18, "replace_status", "替换地点", slot="place", duration_type="until_clear"),
+        _cell(20, "penalty_choice", "选择惩罚"),
+        _cell(21, "move", "限制拖回", steps=-1),
+        _cell(23, "clear_reward", "解除状态+奖励", reward=REWARD_CARD_PASS),
+        _cell(24, "add_status", "姿势锁定", slot="pose", duration_type="until_finish"),
+        _cell(26, "penalty_review", "验收任务"),
+        _cell(27, "reward", "奖励抽卡", reward=REWARD_CARD_PASS),
+        _cell(29, "extend_status", "状态延长"),
+        _cell(30, "penalty_choice", "选择惩罚"),
+        _cell(31, "move", "限制拖回", steps=-2),
+        _cell(33, "penalty_review", "验收任务"),
+        _cell(34, "block", "道具停步", slot="prop", actions=1),
+        _cell(35, "clear_status", "解除状态"),
     ]
-    finish = _cell(board_size, "finish", "Finish")
+    finish = _cell(board_size, "finish", "终点")
     return [item for item in events if item["position"] < board_size] + [finish]
 
 
@@ -229,13 +229,13 @@ def _run_on_state(state: dict[str, Any], command: str, labels: dict[str, str]) -
         seed, board_size = _parse_new_game_args(args)
         state.clear()
         state.update(_default_state(seed=seed, board_size=board_size))
-        return _payload(state, verb, _status_text(state, labels, intro="New game started."), labels)
+        return _payload(state, verb, _status_text(state, labels, intro="新局已开始。"), labels)
     if verb in {"end_game", "end", "stop"}:
         state["game_over"] = True
-        state["result"] = "Game ended manually."
-        return _payload(state, verb, _status_text(state, labels, intro="Game ended."), labels)
+        state["result"] = "游戏已手动结束。"
+        return _payload(state, verb, _status_text(state, labels, intro="游戏已结束。"), labels)
     if state.get("game_over"):
-        return _payload(state, verb, _status_text(state, labels, intro="The game is already over. Use new_game to restart."), labels, ok=False)
+        return _payload(state, verb, _status_text(state, labels, intro="本局已经结束。使用 new_game 重新开始。"), labels, ok=False)
     if verb == "roll":
         dice = _parse_roll(args)
         return _roll(state, dice, labels)
@@ -249,7 +249,7 @@ def _run_on_state(state: dict[str, Any], command: str, labels: dict[str, str]) -
         return _choose(state, args, labels)
     if verb == "pass":
         return _pass_pending(state, labels)
-    return _payload(state, verb, _status_text(state, labels, intro=f"Unknown command. {COMMAND_HINT}"), labels, ok=False)
+    return _payload(state, verb, _status_text(state, labels, intro=f"未知命令。{COMMAND_HINT}"), labels, ok=False)
 
 
 def _parse_command(command: str) -> tuple[str, str]:
@@ -306,15 +306,15 @@ def _rng_pick(state: dict[str, Any], items: Iterable[Any]) -> Any:
 
 def _roll(state: dict[str, Any], dice: int | None, labels: dict[str, str]) -> dict[str, Any]:
     if state.get("pending_event"):
-        return _payload(state, "roll", _status_text(state, labels, intro="Resolve the pending event before rolling."), labels, ok=False)
+        return _payload(state, "roll", _status_text(state, labels, intro="当前还有待处理事件，先处理完再掷骰。"), labels, ok=False)
 
     actor = state["turn_actor"]
     blocked = _consume_blocked_action(state, actor)
     if blocked:
         text = _compact_text(
             [
-                f"{_actor_label(actor, labels)} cannot move this action because of {blocked.get('value') or blocked.get('label')}.",
-                f"Remaining blocked actions: {blocked.get('remaining_actions', 0)}.",
+                f"{_actor_label(actor, labels)}因为「{blocked.get('value') or blocked.get('label')}」本次无法行动。",
+                f"剩余停步次数：{blocked.get('remaining_actions', 0)}。",
                 _advance_turn(state, actor),
             ]
         )
@@ -328,14 +328,14 @@ def _roll(state: dict[str, Any], dice: int | None, labels: dict[str, str]) -> di
     state["positions"][actor] = new_pos
     state["turn_index"] = int(state.get("turn_index") or 0) + 1
 
-    lines = [f"{_actor_label(actor, labels)} rolled {dice_value}, moving from {old_pos} to {new_pos}."]
+    lines = [f"{_actor_label(actor, labels)}掷出 {dice_value}，从 {old_pos} 走到 {new_pos}。"]
     event_lines = _apply_cell_event(state, actor, new_pos, labels)
     lines.extend(event_lines)
 
     if new_pos >= board_size:
         state["game_over"] = True
         state["winner"] = actor
-        state["result"] = f"{_actor_label(actor, labels)} reached the finish and wins."
+        state["result"] = f"{_actor_label(actor, labels)}到达终点，获得胜利。"
         lines.append(state["result"])
     elif not state.get("pending_event"):
         lines.append(_advance_turn(state, actor))
@@ -360,7 +360,7 @@ def _consume_blocked_action(state: dict[str, Any], actor: str) -> dict[str, Any]
 def _advance_turn(state: dict[str, Any], actor: str) -> str:
     next_actor = _other(actor)
     state["turn_actor"] = next_actor
-    return f"Next action: {_actor_label(next_actor)}."
+    return f"下一次行动：{_actor_label(next_actor)}。"
 
 
 def _apply_cell_event(state: dict[str, Any], actor: str, position: int, labels: dict[str, str]) -> list[str]:
@@ -370,7 +370,7 @@ def _apply_cell_event(state: dict[str, Any], actor: str, position: int, labels: 
         return []
 
     kind = event["kind"]
-    lines = [f"Cell {position}: {event['name']}."]
+    lines = [f"第 {position} 格：{event['name']}。"]
     if kind == "theme":
         lines.append(_set_theme(state))
     elif kind == "reward":
@@ -389,7 +389,7 @@ def _apply_cell_event(state: dict[str, Any], actor: str, position: int, labels: 
         lines.append(_move_without_event(state, actor, int(event.get("steps") or 0), labels))
     elif kind == "swap_positions":
         state["positions"]["player"], state["positions"]["ai"] = state["positions"]["ai"], state["positions"]["player"]
-        lines.append("Both players swapped positions.")
+        lines.append("双方交换位置。")
     elif kind == "clear_status":
         lines.append(_clear_status(state, actor, labels))
     elif kind == "extend_status":
@@ -399,7 +399,8 @@ def _apply_cell_event(state: dict[str, Any], actor: str, position: int, labels: 
         before = len(state["statuses"].get(actor, []))
         state["statuses"][actor] = [item for item in state["statuses"].get(actor, []) if item.get("slot") != slot]
         removed = before - len(state["statuses"].get(actor, []))
-        lines.append(f"Removed {removed} {slot} state." if removed else f"No {slot} state to replace.")
+        slot_label = _status_label(slot)
+        lines.append(f"已移除 {removed} 个{slot_label}状态。" if removed else f"当前没有可替换的{slot_label}状态。")
         lines.append(_add_status(state, actor, slot, str(event.get("duration_type") or "until_clear"), labels))
     elif kind == "penalty_review":
         lines.append(_assign_review_penalty(state, actor, position, labels))
@@ -424,16 +425,16 @@ def _set_theme(state: dict[str, Any]) -> str:
         "theme": theme.get("name"),
         "lead": lead,
         "direction": lead,
-        "direction_label": f"{_actor_label(lead)} leads",
+        "direction_label": f"{_actor_label(lead)}主导",
     }
-    return f"Theme set to {theme.get('name')}; {_actor_label(lead)} leads."
+    return f"本局主题设为「{theme.get('name')}」，主导方：{_actor_label(lead)}。"
 
 
 def _give_reward(state: dict[str, Any], actor: str, reward_id: str, labels: dict[str, str]) -> str:
     reward_id = reward_id or REWARD_CARD_PASS
     hand = state["hands"].setdefault(actor, {REWARD_CARD_PASS: 0})
     hand[reward_id] = int(hand.get(reward_id) or 0) + 1
-    return f"{_actor_label(actor, labels)} gained {REWARD_CARD_LABELS.get(reward_id, reward_id)}."
+    return f"{_actor_label(actor, labels)}获得 {REWARD_CARD_LABELS.get(reward_id, reward_id)}。"
 
 
 def _add_status(state: dict[str, Any], actor: str, slot: str, duration_type: str, labels: dict[str, str], *, value: str | None = None, level: int = 1) -> str:
@@ -448,7 +449,7 @@ def _add_status(state: dict[str, Any], actor: str, slot: str, duration_type: str
         "blocks_action": False,
     }
     state["statuses"].setdefault(actor, []).append(item)
-    return f"{_actor_label(actor, labels)} is now under {_status_label(slot)}: {value}."
+    return f"{_actor_label(actor, labels)}新增{_status_label(slot)}：{value}。"
 
 
 def _add_block(state: dict[str, Any], actor: str, slot: str, actions: int, labels: dict[str, str]) -> str:
@@ -464,7 +465,7 @@ def _add_block(state: dict[str, Any], actor: str, slot: str, actions: int, label
         "blocks_action": True,
     }
     state["statuses"].setdefault(actor, []).append(item)
-    return f"{_actor_label(actor, labels)} loses {item['remaining_actions']} action(s) under {value}."
+    return f"{_actor_label(actor, labels)}受到「{value}」影响，失去 {item['remaining_actions']} 次行动。"
 
 
 def _status_value(state: dict[str, Any], slot: str) -> str:
@@ -477,29 +478,29 @@ def _move_without_event(state: dict[str, Any], actor: str, steps: int, labels: d
     old = int(state["positions"].get(actor) or 0)
     new = max(0, min(board_size, old + int(steps)))
     state["positions"][actor] = new
-    direction = "forward" if steps >= 0 else "back"
-    return f"{_actor_label(actor, labels)} moved {direction} {abs(int(steps))} cell(s), from {old} to {new}."
+    direction = "前进" if steps >= 0 else "后退"
+    return f"{_actor_label(actor, labels)}{direction} {abs(int(steps))} 格，从 {old} 到 {new}。"
 
 
 def _clear_status(state: dict[str, Any], actor: str, labels: dict[str, str]) -> str:
     statuses = state["statuses"].get(actor, [])
     if not statuses:
-        return f"{_actor_label(actor, labels)} has no state to clear."
+        return f"{_actor_label(actor, labels)}当前没有可解除状态。"
     index = _rng_int(state, 0, len(statuses) - 1)
     removed = statuses.pop(index)
-    return f"Cleared {_actor_label(actor, labels)}'s {removed.get('label')}: {removed.get('value')}."
+    return f"已解除{_actor_label(actor, labels)}的{removed.get('label')}：{removed.get('value')}。"
 
 
 def _extend_status(state: dict[str, Any], actor: str, labels: dict[str, str]) -> str:
     statuses = state["statuses"].get(actor, [])
     if not statuses:
-        return f"{_actor_label(actor, labels)} has no state to extend."
+        return f"{_actor_label(actor, labels)}当前没有可延长状态。"
     item = statuses[_rng_int(state, 0, len(statuses) - 1)]
     if item.get("duration_type") == "actions":
         item["remaining_actions"] = int(item.get("remaining_actions") or 0) + 1
-        return f"Extended {_actor_label(actor, labels)}'s {item.get('label')} by 1 blocked action."
+        return f"{_actor_label(actor, labels)}的{item.get('label')}额外延长 1 次停步。"
     item["level"] = int(item.get("level") or 1) + 1
-    return f"Raised {_actor_label(actor, labels)}'s {item.get('label')} level to {item['level']}."
+    return f"{_actor_label(actor, labels)}的{item.get('label')}上调到 {item['level']} 档。"
 
 
 def _assign_review_penalty(state: dict[str, Any], actor: str, position: int, labels: dict[str, str]) -> str:
@@ -518,13 +519,13 @@ def _assign_review_penalty(state: dict[str, Any], actor: str, position: int, lab
         "reject_prompt": card.get("reject_prompt"),
         "pass_allowed": bool(card.get("pass_allowed")),
         "cell": position,
-        "theme": (state.get("theme_profile") or {}).get("theme") or "No theme",
+        "theme": (state.get("theme_profile") or {}).get("theme") or "未触发主题",
         "reject_count": 0,
         "next_actor_after_event": _other(actor),
     }
     state["pending_event"] = pending
     state["turn_actor"] = actor
-    return f"Review task assigned to {_actor_label(actor, labels)}: {pending['task']}"
+    return f"{_actor_label(actor, labels)}抽到验收任务：{pending['task']}"
 
 
 def _assign_choice_penalty(state: dict[str, Any], actor: str, position: int, labels: dict[str, str]) -> str:
@@ -539,7 +540,7 @@ def _assign_choice_penalty(state: dict[str, Any], actor: str, position: int, lab
         "name": card.get("name"),
         "actor": actor,
         "phase": "assigned",
-        "prompt": card.get("prompt") or "Choose one penalty.",
+        "prompt": card.get("prompt") or "选择一项惩罚。",
         "pass_allowed": bool(card.get("pass_allowed")),
         "cell": position,
         "choices": choices,
@@ -547,7 +548,7 @@ def _assign_choice_penalty(state: dict[str, Any], actor: str, position: int, lab
     }
     state["pending_event"] = pending
     state["turn_actor"] = actor
-    return f"Choice penalty assigned to {_actor_label(actor, labels)}: {pending['prompt']}"
+    return f"{_actor_label(actor, labels)}抽到选择惩罚：{pending['prompt']}"
 
 
 def _available_choices(state: dict[str, Any], actor: str, choices: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -564,17 +565,17 @@ def _available_choices(state: dict[str, Any], actor: str, choices: Iterable[dict
 def _submit(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending or pending.get("type") != "review":
-        return _payload(state, "submit", _status_text(state, labels, intro="There is no review task to submit."), labels, ok=False)
+        return _payload(state, "submit", _status_text(state, labels, intro="当前没有需要提交的验收任务。"), labels, ok=False)
     actor = pending.get("actor")
     if state.get("turn_actor") != actor:
-        return _payload(state, "submit", _status_text(state, labels, intro=f"It is not {_actor_label(actor, labels)}'s submission turn."), labels, ok=False)
+        return _payload(state, "submit", _status_text(state, labels, intro=f"现在不是{_actor_label(actor, labels)}的提交回合。"), labels, ok=False)
     text = args.strip()
     if not text:
-        return _payload(state, "submit", _status_text(state, labels, intro="Submit text cannot be empty."), labels, ok=False)
+        return _payload(state, "submit", _status_text(state, labels, intro="提交内容不能为空。"), labels, ok=False)
     pending["phase"] = "submitted"
     pending["submission_text"] = text
     state["turn_actor"] = pending.get("reviewer") or _other(actor)
-    intro = f"{_actor_label(actor, labels)} submitted the task. Waiting for {_actor_label(state['turn_actor'], labels)} to approve or reject."
+    intro = f"{_actor_label(actor, labels)}已提交任务，等待{_actor_label(state['turn_actor'], labels)}通过或驳回。"
     _log(state, actor, intro)
     return _payload(state, "submit", _status_text(state, labels, intro=intro), labels)
 
@@ -582,25 +583,25 @@ def _submit(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[st
 def _approve(state: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending or pending.get("type") != "review":
-        return _payload(state, "approve", _status_text(state, labels, intro="There is no review task to approve."), labels, ok=False)
+        return _payload(state, "approve", _status_text(state, labels, intro="当前没有待验收任务。"), labels, ok=False)
     reviewer = pending.get("reviewer")
     if state.get("turn_actor") != reviewer or pending.get("phase") != "submitted":
-        return _payload(state, "approve", _status_text(state, labels, intro=f"Waiting for {_actor_label(pending.get('actor'), labels)} to submit first."), labels, ok=False)
+        return _payload(state, "approve", _status_text(state, labels, intro=f"正在等待{_actor_label(pending.get('actor'), labels)}先提交任务。"), labels, ok=False)
     actor = pending.get("actor")
-    intro = f"{_actor_label(reviewer, labels)} approved {_actor_label(actor, labels)}'s task. The event is complete."
+    intro = f"{_actor_label(reviewer, labels)}通过了{_actor_label(actor, labels)}的任务，本次事件完成。"
     state["pending_event"] = None
     state["turn_actor"] = pending.get("next_actor_after_event") or _other(actor)
     _log(state, reviewer, intro)
-    return _payload(state, "approve", _status_text(state, labels, intro=_compact_text([intro, f"Next action: {_actor_label(state['turn_actor'], labels)}."])), labels)
+    return _payload(state, "approve", _status_text(state, labels, intro=_compact_text([intro, f"下一次行动：{_actor_label(state['turn_actor'], labels)}。"])), labels)
 
 
 def _reject(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending or pending.get("type") != "review":
-        return _payload(state, "reject", _status_text(state, labels, intro="There is no review task to reject."), labels, ok=False)
+        return _payload(state, "reject", _status_text(state, labels, intro="当前没有可驳回的验收任务。"), labels, ok=False)
     reviewer = pending.get("reviewer")
     if state.get("turn_actor") != reviewer or pending.get("phase") != "submitted":
-        return _payload(state, "reject", _status_text(state, labels, intro=f"Waiting for {_actor_label(pending.get('actor'), labels)} to submit first."), labels, ok=False)
+        return _payload(state, "reject", _status_text(state, labels, intro=f"正在等待{_actor_label(pending.get('actor'), labels)}先提交任务。"), labels, ok=False)
     pending["phase"] = "assigned"
     pending["reject_count"] = int(pending.get("reject_count") or 0) + 1
     reason = args.strip()
@@ -608,7 +609,7 @@ def _reject(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[st
         pending["last_reject_reason"] = reason
     actor = pending.get("actor")
     state["turn_actor"] = actor
-    intro = pending.get("reject_prompt") or f"{_actor_label(reviewer, labels)} rejected the submission. Submit again."
+    intro = pending.get("reject_prompt") or f"{_actor_label(reviewer, labels)}驳回了提交，请重新提交。"
     _log(state, reviewer, intro)
     return _payload(state, "reject", _status_text(state, labels, intro=intro), labels)
 
@@ -616,17 +617,17 @@ def _reject(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[st
 def _choose(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending or pending.get("type") != "choice":
-        return _payload(state, "choose", _status_text(state, labels, intro="There is no choice penalty to resolve."), labels, ok=False)
+        return _payload(state, "choose", _status_text(state, labels, intro="当前没有需要处理的选择惩罚。"), labels, ok=False)
     actor = pending.get("actor")
     if state.get("turn_actor") != actor:
-        return _payload(state, "choose", _status_text(state, labels, intro=f"It is not {_actor_label(actor, labels)}'s choice turn."), labels, ok=False)
+        return _payload(state, "choose", _status_text(state, labels, intro=f"现在不是{_actor_label(actor, labels)}的选择回合。"), labels, ok=False)
     selected = _find_choice(pending.get("choices") or [], args)
     if not selected:
-        return _payload(state, "choose", _status_text(state, labels, intro="Choice not found. Use choose <choice id>."), labels, ok=False)
+        return _payload(state, "choose", _status_text(state, labels, intro="没有找到这个选项。请使用 choose <选项id>。"), labels, ok=False)
     result = _apply_choice_effect(state, actor, selected, labels)
     state["pending_event"] = None
     state["turn_actor"] = pending.get("next_actor_after_event") or _other(actor)
-    intro = _compact_text([f"{_actor_label(actor, labels)} chose: {selected.get('label')}.", result, f"Next action: {_actor_label(state['turn_actor'], labels)}."])
+    intro = _compact_text([f"{_actor_label(actor, labels)}选择了：{selected.get('label')}。", result, f"下一次行动：{_actor_label(state['turn_actor'], labels)}。"])
     _log(state, actor, intro)
     return _payload(state, "choose", _status_text(state, labels, intro=intro), labels)
 
@@ -663,35 +664,35 @@ def _apply_choice_effect(state: dict[str, Any], actor: str, choice: dict[str, An
                 _add_block(state, actor, str(effect.get("slot") or "prop"), int(effect.get("actions") or 1), labels),
             ]
         )
-    return "No effect was applied."
+    return "没有结算任何效果。"
 
 
 def _upgrade_status_level(state: dict[str, Any], actor: str, slot: str, delta: int, labels: dict[str, str]) -> str:
     for item in reversed(state["statuses"].get(actor, [])):
         if item.get("slot") == slot:
             item["level"] = int(item.get("level") or 1) + int(delta)
-            return f"Raised {_actor_label(actor, labels)}'s {item.get('label')} level to {item['level']}."
+            return f"{_actor_label(actor, labels)}的{item.get('label')}上调到 {item['level']} 档。"
     return _add_status(state, actor, slot, "until_clear", labels)
 
 
 def _pass_pending(state: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending:
-        return _payload(state, "pass", _status_text(state, labels, intro="There is no pending penalty to pass."), labels, ok=False)
+        return _payload(state, "pass", _status_text(state, labels, intro="当前没有可跳过的待处理惩罚。"), labels, ok=False)
     actor = pending.get("actor")
     if state.get("turn_actor") != actor:
-        return _payload(state, "pass", _status_text(state, labels, intro=f"Only {_actor_label(actor, labels)} can pass this penalty."), labels, ok=False)
+        return _payload(state, "pass", _status_text(state, labels, intro=f"只有{_actor_label(actor, labels)}可以跳过这个惩罚。"), labels, ok=False)
     if not pending.get("pass_allowed"):
-        return _payload(state, "pass", _status_text(state, labels, intro="This penalty cannot be passed."), labels, ok=False)
+        return _payload(state, "pass", _status_text(state, labels, intro="这个惩罚不能使用 Pass 卡跳过。"), labels, ok=False)
     hand = state["hands"].setdefault(actor, {REWARD_CARD_PASS: 0})
     if int(hand.get(REWARD_CARD_PASS) or 0) <= 0:
-        return _payload(state, "pass", _status_text(state, labels, intro=f"{_actor_label(actor, labels)} has no Pass Card."), labels, ok=False)
+        return _payload(state, "pass", _status_text(state, labels, intro=f"{_actor_label(actor, labels)}没有 Pass 卡。"), labels, ok=False)
     hand[REWARD_CARD_PASS] = int(hand.get(REWARD_CARD_PASS) or 0) - 1
     state["pending_event"] = None
     state["turn_actor"] = pending.get("next_actor_after_event") or _other(actor)
-    intro = f"{_actor_label(actor, labels)} used a Pass Card. Pending penalty skipped."
+    intro = f"{_actor_label(actor, labels)}使用 Pass 卡，跳过当前惩罚。"
     _log(state, actor, intro)
-    return _payload(state, "pass", _status_text(state, labels, intro=_compact_text([intro, f"Next action: {_actor_label(state['turn_actor'], labels)}."])), labels)
+    return _payload(state, "pass", _status_text(state, labels, intro=_compact_text([intro, f"下一次行动：{_actor_label(state['turn_actor'], labels)}。"])), labels)
 
 
 def _board_payload(state: dict[str, Any]) -> dict[str, Any]:
@@ -699,7 +700,7 @@ def _board_payload(state: dict[str, Any]) -> dict[str, Any]:
     events = {item["position"]: item for item in build_cell_events(board_size)}
     cells = []
     for position in range(1, board_size + 1):
-        event = deepcopy(events.get(position) or {"position": position, "kind": "empty", "name": "Empty"})
+        event = deepcopy(events.get(position) or {"position": position, "kind": "empty", "name": "空"})
         cells.append(event)
     return {"size": board_size, "cells": cells}
 
@@ -718,8 +719,8 @@ def _payload(state: dict[str, Any], command: str, text: str, labels: dict[str, s
         "game_id": GAME_ID,
         "command": command,
         "text": text,
-        "player_text": _status_text(state, {"player": "You", "ai": labels.get("ai", "AI")}),
-        "ai_text": _status_text(state, {"player": labels.get("player", "Player"), "ai": "You"}),
+        "player_text": _status_text(state, {"player": "你", "ai": labels.get("ai", "对方")}),
+        "ai_text": _status_text(state, {"player": labels.get("player", "对方"), "ai": "你"}),
         "board": board,
         "state": public_state,
         "game_over": bool(state.get("game_over")),
@@ -735,9 +736,9 @@ def _status_text(state: dict[str, Any], labels: dict[str, str], intro: str = "")
     turn_actor = state.get("turn_actor") or "player"
     lines = [
         intro,
-        f"Progress: {_actor_label('player', labels)} {int(pos.get('player') or 0)}/{board_size} | {_actor_label('ai', labels)} {int(pos.get('ai') or 0)}/{board_size}",
+        f"进度：{_actor_label('player', labels)} {int(pos.get('player') or 0)}/{board_size} | {_actor_label('ai', labels)} {int(pos.get('ai') or 0)}/{board_size}",
         _theme_line(state, labels),
-        f"Turn: {_actor_label(turn_actor, labels)}",
+        f"轮到：{_actor_label(turn_actor, labels)}",
         _hand_line(state, labels),
         _statuses_line(state, "player", labels),
         _statuses_line(state, "ai", labels),
@@ -749,15 +750,15 @@ def _status_text(state: dict[str, Any], labels: dict[str, str], intro: str = "")
 def _theme_line(state: dict[str, Any], labels: dict[str, str]) -> str:
     profile = state.get("theme_profile")
     if not profile:
-        return "Theme: not triggered"
+        return "主题：未触发"
     lead = str(profile.get("lead") or profile.get("direction") or "")
-    return f"Theme: {profile.get('theme')} | Lead: {_actor_label(lead, labels)}"
+    return f"主题：{profile.get('theme')} | 主导方：{_actor_label(lead, labels)}"
 
 
 def _hand_line(state: dict[str, Any], labels: dict[str, str]) -> str:
     hands = state.get("hands") or {}
-    return "Hands: " + " | ".join(
-        f"{_actor_label(actor, labels)} Pass Card x{int((hands.get(actor) or {}).get(REWARD_CARD_PASS) or 0)}"
+    return "手牌：" + " | ".join(
+        f"{_actor_label(actor, labels)} Pass 卡 x{int((hands.get(actor) or {}).get(REWARD_CARD_PASS) or 0)}"
         for actor in ACTORS
     )
 
@@ -765,33 +766,44 @@ def _hand_line(state: dict[str, Any], labels: dict[str, str]) -> str:
 def _statuses_line(state: dict[str, Any], actor: str, labels: dict[str, str]) -> str:
     statuses = state.get("statuses", {}).get(actor, [])
     if not statuses:
-        return f"{_actor_label(actor, labels)} states: none"
+        return f"{_actor_label(actor, labels)}状态：无"
     parts = []
     for item in statuses:
         duration = item.get("duration_type")
         tail = ""
         if duration == "actions":
-            tail = f", {int(item.get('remaining_actions') or 0)} action(s) left"
+            tail = f"，剩余 {int(item.get('remaining_actions') or 0)} 次行动"
         elif duration:
-            tail = f", {duration}"
+            tail = f"，{_duration_label(str(duration))}"
         level = int(item.get("level") or 1)
-        level_text = f" Lv.{level}" if level > 1 else ""
+        level_text = f"（{level}档）" if level > 1 else ""
         parts.append(f"{item.get('label')}: {item.get('value')}{level_text}{tail}")
-    return f"{_actor_label(actor, labels)} states: " + "; ".join(parts)
+    return f"{_actor_label(actor, labels)}状态：" + "；".join(parts)
+
+
+def _duration_label(duration: str) -> str:
+    if duration == "until_clear":
+        return "待解除"
+    if duration == "until_finish":
+        return "到终点"
+    if duration == "actions":
+        return "按行动次数"
+    return duration
 
 
 def _pending_line(state: dict[str, Any], labels: dict[str, str]) -> str:
     pending = state.get("pending_event")
     if not pending:
-        return "Pending: none"
+        return "待处理：无"
     actor = _actor_label(str(pending.get("actor") or ""), labels)
     if pending.get("type") == "review":
         reviewer = _actor_label(str(pending.get("reviewer") or ""), labels)
-        return f"Pending review: {pending.get('name')} for {actor}. Phase: {pending.get('phase')}. Reviewer: {reviewer}. Task: {pending.get('task')}"
+        phase = "已提交，待验收" if pending.get("phase") == "submitted" else "待提交"
+        return f"待处理验收任务：{pending.get('name')}；执行方：{actor}；状态：{phase}；验收方：{reviewer}；任务：{pending.get('task')}"
     if pending.get("type") == "choice":
         choices = ", ".join(f"{idx}. {item.get('label')} [{item.get('id')}]" for idx, item in enumerate(pending.get("choices") or [], start=1))
-        return f"Pending choice: {pending.get('name')} for {actor}. {pending.get('prompt')} Choices: {choices}"
-    return f"Pending: {pending.get('name') or pending.get('type')}"
+        return f"待处理选择惩罚：{pending.get('name')}；执行方：{actor}；{pending.get('prompt')} 选项：{choices}"
+    return f"待处理：{pending.get('name') or pending.get('type')}"
 
 
 def _log(state: dict[str, Any], actor: str, text: str) -> None:
