@@ -531,7 +531,7 @@ function StatusCard({
 }) {
   return (
     <section className="sbg-status-card">
-      <h2>{actorName(actor, labels)} Status</h2>
+      <h2>{actorName(actor, labels)}状态</h2>
       <div className="sbg-tags">
         <span className="sbg-tag">
           {labels.passCard} x{passCount}
@@ -540,7 +540,7 @@ function StatusCard({
           statuses.map((item, index) => (
             <span className="sbg-tag" key={item.id || `${item.slot}-${index}`}>
               {item.label || item.slot}: {item.value}
-              {item.level && item.level > 1 ? ` Lv.${item.level}` : ""}
+              {item.level && item.level > 1 ? `（${item.level}档）` : ""}
               {item.duration_type === "actions" ? ` / ${labels.actionLeft} ${item.remaining_actions || 0}` : ""}
             </span>
           ))
