@@ -72,6 +72,10 @@ def _status_title(item: dict[str, Any]) -> str:
 
 def _format_status_item(item: dict[str, Any], *, include_duration: bool = True) -> str:
     title = _status_title(item)
+    return f"{title}：{_format_status_body(item, include_duration=include_duration)}"
+
+
+def _format_status_body(item: dict[str, Any], *, include_duration: bool = True) -> str:
     value = str(item.get("value") or "未指定")
     level = int(item.get("level") or 1)
     details: list[str] = []
@@ -84,7 +88,19 @@ def _format_status_item(item: dict[str, Any], *, include_duration: bool = True) 
         elif duration:
             details.append(_duration_label(duration))
     suffix = f"（{'，'.join(details)}）" if details else ""
-    return f"{title}：{value}{suffix}"
+    return f"{value}{suffix}"
+
+
+def _group_status_items(items: Iterable[dict[str, Any]]) -> list[str]:
+    grouped: dict[str, list[str]] = {}
+    order: list[str] = []
+    for item in items:
+        title = _status_title(item)
+        if title not in grouped:
+            grouped[title] = []
+            order.append(title)
+        grouped[title].append(_format_status_body(item))
+    return [f"{title}：" + "、".join(grouped[title]) for title in order]
 
 
 def _compact_text(lines: Iterable[str]) -> str:
@@ -799,9 +815,7 @@ def _statuses_line(state: dict[str, Any], actor: str, labels: dict[str, str]) ->
     statuses = state.get("statuses", {}).get(actor, [])
     if not statuses:
         return f"{_actor_label(actor, labels)}状态：无"
-    parts = []
-    for item in statuses:
-        parts.append(_format_status_item(item))
+    parts = _group_status_items(statuses)
     return f"{_actor_label(actor, labels)}状态：" + "；".join(parts)
 
 

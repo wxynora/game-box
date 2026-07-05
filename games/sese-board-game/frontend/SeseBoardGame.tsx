@@ -537,9 +537,9 @@ function StatusCard({
           {labels.passCard} x{passCount}
         </span>
         {statuses.length ? (
-          statuses.map((item, index) => (
-            <span className="sbg-tag" key={item.id || `${item.slot}-${index}`}>
-              {formatStatusItem(item)}
+          groupStatusItems(statuses).map((group) => (
+            <span className="sbg-tag" key={group.title}>
+              {group.title}：{group.items.join("、")}
             </span>
           ))
         ) : (
@@ -651,12 +651,30 @@ function PendingPanel({
 
 function formatStatusItem(item: StatusItem) {
   const title = statusTitle(item);
+  return `${title}：${formatStatusBody(item)}`;
+}
+
+function formatStatusBody(item: StatusItem) {
   const value = item.value || "未指定";
   const details: string[] = [];
   if (item.slot === "prop" && item.level && item.level > 1) details.push(`${item.level}档`);
   const duration = statusDuration(item);
   if (duration) details.push(duration);
-  return `${title}：${value}${details.length ? `（${details.join("，")}）` : ""}`;
+  return `${value}${details.length ? `（${details.join("，")}）` : ""}`;
+}
+
+function groupStatusItems(statuses: StatusItem[]) {
+  const groups: { title: string; items: string[] }[] = [];
+  for (const item of statuses) {
+    const title = statusTitle(item);
+    let group = groups.find((entry) => entry.title === title);
+    if (!group) {
+      group = { title, items: [] };
+      groups.push(group);
+    }
+    group.items.push(formatStatusBody(item));
+  }
+  return groups;
 }
 
 function statusTitle(item: StatusItem) {
