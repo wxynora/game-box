@@ -96,6 +96,40 @@ export type SeseBoardLabels = Partial<Record<Actor, string>> & {
   roll?: string;
   restart?: string;
   chat?: string;
+  theme?: string;
+  lead?: string;
+  turn?: string;
+  runAssistant?: string;
+  usePass?: string;
+  waitingFor?: string;
+  waitingReview?: string;
+  waitingSubmission?: string;
+  approve?: string;
+  reject?: string;
+  submit?: string;
+  noStatus?: string;
+  message?: string;
+  noAssistant?: string;
+  back?: string;
+  close?: string;
+  gameBoard?: string;
+  gameChat?: string;
+  system?: string;
+  noMessages?: string;
+  start?: string;
+  finish?: string;
+  empty?: string;
+  passCard?: string;
+  actionLeft?: string;
+  choicePenalty?: string;
+  choosePenalty?: string;
+  reviewTask?: string;
+  rejectReason?: string;
+  submitResponse?: string;
+  ready?: string;
+  gameOver?: string;
+  noLead?: string;
+  assistantCommandMissing?: string;
 };
 
 export type SeseBoardGameProps = {
@@ -115,12 +149,46 @@ type ChatMessage = {
 };
 
 const DEFAULT_LABELS: Required<SeseBoardLabels> = {
-  player: "Player",
-  ai: "AI",
-  title: "Sese Board Game",
-  roll: "Roll Dice",
-  restart: "Restart",
-  chat: "Chat",
+  player: "你",
+  ai: "对方",
+  title: "涩涩走格棋",
+  roll: "掷骰子",
+  restart: "重新开始",
+  chat: "交流",
+  theme: "主题",
+  lead: "主导方",
+  turn: "轮到",
+  runAssistant: "让对方行动",
+  usePass: "使用 Pass 卡",
+  waitingFor: "等待",
+  waitingReview: "等待验收",
+  waitingSubmission: "等待提交",
+  approve: "通过",
+  reject: "驳回",
+  submit: "提交",
+  noStatus: "无状态",
+  message: "输入消息",
+  noAssistant: "未接入对方适配器",
+  back: "返回",
+  close: "关闭",
+  gameBoard: "棋盘",
+  gameChat: "局内交流",
+  system: "系统",
+  noMessages: "暂无局内消息",
+  start: "起点",
+  finish: "终点",
+  empty: "空",
+  passCard: "Pass 卡",
+  actionLeft: "剩余行动",
+  choicePenalty: "选择惩罚",
+  choosePenalty: "选择一项惩罚。",
+  reviewTask: "验收任务",
+  rejectReason: "可选：驳回理由",
+  submitResponse: "提交内容",
+  ready: "准备好了。",
+  gameOver: "游戏结束。",
+  noLead: "待定",
+  assistantCommandMissing: "对方回复里没有可执行的括号指令。",
 };
 
 const STYLE_ID = "sese-board-game-style";
@@ -255,7 +323,7 @@ export function SeseBoardGame({
         if (command) {
           await run(command, { animateDice: command.startsWith("roll") });
         } else {
-          appendMessage(setMessages, "system", "Assistant replied without a bracketed game command.");
+          appendMessage(setMessages, "system", mergedLabels.assistantCommandMissing);
         }
       } finally {
         setBusy(false);
@@ -286,7 +354,7 @@ export function SeseBoardGame({
       <header className="sbg-header">
         <div className="sbg-header-actions">
           {onBack ? (
-            <button className="sbg-icon-button" type="button" onClick={onBack} aria-label="Back">
+            <button className="sbg-icon-button" type="button" onClick={onBack} aria-label={mergedLabels.back}>
               <BackIcon />
             </button>
           ) : (
@@ -298,16 +366,18 @@ export function SeseBoardGame({
           </button>
         </div>
         <div className="sbg-score">
-          <InfoBlock label="Theme" value={state?.theme_profile?.theme || "Not triggered"} />
-          <InfoBlock label="Lead" value={leadLabel(state, mergedLabels)} />
+          <InfoBlock label={mergedLabels.theme} value={state?.theme_profile?.theme || "未触发"} />
+          <InfoBlock label={mergedLabels.lead} value={leadLabel(state, mergedLabels)} />
           <InfoBlock label={mergedLabels.player} value={`${playerPos}/${boardSize}`} />
           <InfoBlock label={mergedLabels.ai} value={`${aiPos}/${boardSize}`} />
-          <div className="sbg-turn">Turn: {actorName(turnActor, mergedLabels)}</div>
+          <div className="sbg-turn">
+            {mergedLabels.turn}: {actorName(turnActor, mergedLabels)}
+          </div>
         </div>
       </header>
 
       <main className="sbg-main">
-        <div className="sbg-board" aria-label="Game board">
+        <div className="sbg-board" aria-label={mergedLabels.gameBoard}>
           {rows.map((row, rowIndex) => (
             <div className="sbg-row" key={`row-${rowIndex}`}>
               {row.map((cell) => (
@@ -348,10 +418,10 @@ export function SeseBoardGame({
           />
         ) : null}
 
-        {state?.game_over ? <div className="sbg-result">{state.result || "Game over."}</div> : null}
+        {state?.game_over ? <div className="sbg-result">{state.result || mergedLabels.gameOver}</div> : null}
 
         <div className="sbg-controls">
-          <div className={["sbg-dice", rolling ? "is-rolling" : ""].join(" ")} aria-label={`Dice ${dice}`}>
+          <div className={["sbg-dice", rolling ? "is-rolling" : ""].join(" ")} aria-label={`${mergedLabels.roll} ${dice}`}>
             {dice}
           </div>
           <button className="sbg-primary" type="button" disabled={!canRoll} onClick={() => run("roll", { animateDice: true })}>
@@ -359,7 +429,7 @@ export function SeseBoardGame({
           </button>
           {canAskAi ? (
             <button className="sbg-secondary" type="button" onClick={() => payload && askAssistantForTurn(payload)}>
-              Run AI Turn
+              {mergedLabels.runAssistant}
             </button>
           ) : null}
           <button className="sbg-secondary" type="button" disabled={busy} onClick={() => run("new_game")}>
@@ -367,15 +437,15 @@ export function SeseBoardGame({
           </button>
         </div>
 
-        <p className="sbg-recent">{recentLine(payload?.text)}</p>
+        <p className="sbg-recent">{recentLine(payload?.text, mergedLabels.ready)}</p>
       </main>
 
       {chatOpen ? (
-        <div className="sbg-modal" role="dialog" aria-modal="true" aria-label="Game chat">
+        <div className="sbg-modal" role="dialog" aria-modal="true" aria-label={mergedLabels.gameChat}>
           <div className="sbg-chat">
             <div className="sbg-chat-head">
               <strong>{mergedLabels.chat}</strong>
-              <button className="sbg-icon-button" type="button" onClick={() => setChatOpen(false)} aria-label="Close">
+              <button className="sbg-icon-button" type="button" onClick={() => setChatOpen(false)} aria-label={mergedLabels.close}>
                 <CloseIcon />
               </button>
             </div>
@@ -383,12 +453,12 @@ export function SeseBoardGame({
               {messages.length ? (
                 messages.map((message) => (
                   <div className={`sbg-message is-${message.speaker}`} key={message.id}>
-                    <span>{message.speaker === "system" ? "System" : actorName(message.speaker, mergedLabels)}</span>
+                    <span>{message.speaker === "system" ? mergedLabels.system : actorName(message.speaker, mergedLabels)}</span>
                     <p>{message.text}</p>
                   </div>
                 ))
               ) : (
-                <p className="sbg-empty">No in-game messages yet.</p>
+                <p className="sbg-empty">{mergedLabels.noMessages}</p>
               )}
             </div>
             <div className="sbg-chat-input">
@@ -399,7 +469,7 @@ export function SeseBoardGame({
                   if (event.key === "Enter") void sendChat();
                 }}
                 disabled={!sendToAssistant || busy}
-                placeholder={sendToAssistant ? "Message" : "No assistant adapter connected"}
+                placeholder={sendToAssistant ? mergedLabels.message : mergedLabels.noAssistant}
               />
               <button className="sbg-icon-button is-solid" type="button" disabled={!sendToAssistant || busy || !chatInput.trim()} onClick={() => void sendChat()}>
                 <SendIcon />
@@ -439,7 +509,7 @@ function BoardTile({
     <div className={`sbg-tile kind-${kind}`}>
       <span className="sbg-tile-index">{cell.position}</span>
       <span className="sbg-tile-icon">{tileIcon(kind)}</span>
-      <span className="sbg-tile-name">{cell.position === 1 ? "Start" : cell.position === boardSize ? "Finish" : cell.name || "Empty"}</span>
+      <span className="sbg-tile-name">{cell.position === 1 ? labels.start : cell.position === boardSize ? labels.finish : cell.name || labels.empty}</span>
       <div className="sbg-pieces">
         {hasPlayer ? <span className="sbg-piece is-player">{shortName(labels.player)}</span> : null}
         {hasAi ? <span className="sbg-piece is-ai">{shortName(labels.ai)}</span> : null}
@@ -463,17 +533,19 @@ function StatusCard({
     <section className="sbg-status-card">
       <h2>{actorName(actor, labels)} Status</h2>
       <div className="sbg-tags">
-        <span className="sbg-tag">Pass x{passCount}</span>
+        <span className="sbg-tag">
+          {labels.passCard} x{passCount}
+        </span>
         {statuses.length ? (
           statuses.map((item, index) => (
             <span className="sbg-tag" key={item.id || `${item.slot}-${index}`}>
               {item.label || item.slot}: {item.value}
               {item.level && item.level > 1 ? ` Lv.${item.level}` : ""}
-              {item.duration_type === "actions" ? ` / ${item.remaining_actions || 0} left` : ""}
+              {item.duration_type === "actions" ? ` / ${labels.actionLeft} ${item.remaining_actions || 0}` : ""}
             </span>
           ))
         ) : (
-          <span className="sbg-tag">No status</span>
+          <span className="sbg-tag">{labels.noStatus}</span>
         )}
       </div>
     </section>
@@ -508,8 +580,8 @@ function PendingPanel({
   if (pending.type === "choice") {
     return (
       <section className="sbg-pending">
-        <h2>{pending.name || "Choice Penalty"}</h2>
-        <p>{pending.prompt || "Choose one penalty."}</p>
+        <h2>{pending.name || labels.choicePenalty}</h2>
+        <p>{pending.prompt || labels.choosePenalty}</p>
         <div className="sbg-choice-list">
           {(pending.choices || []).map((choice) => (
             <button key={choice.id || choice.label} type="button" disabled={busy || pendingActor !== "player"} onClick={() => onRun(`choose ${choice.id || choice.label}`)}>
@@ -518,54 +590,62 @@ function PendingPanel({
           ))}
           {playerCanPass ? (
             <button type="button" disabled={busy} onClick={() => onRun("pass")}>
-              Use Pass Card
+              {labels.usePass}
             </button>
           ) : null}
         </div>
-        {pendingActor !== "player" ? <p className="sbg-muted">Waiting for {actorName(pendingActor, labels)}.</p> : null}
+        {pendingActor !== "player" ? (
+          <p className="sbg-muted">
+            {labels.waitingFor} {actorName(pendingActor, labels)}
+          </p>
+        ) : null}
       </section>
     );
   }
 
   return (
     <section className="sbg-pending">
-      <h2>{pending.name || "Review Task"}</h2>
+      <h2>{pending.name || labels.reviewTask}</h2>
       <p>{pending.task}</p>
       {pending.phase === "submitted" ? (
         <>
           <blockquote>{pending.submission_text}</blockquote>
           {reviewer === "player" ? (
             <>
-              <input value={rejectText} onChange={(event) => onRejectText(event.target.value)} placeholder="Optional reject reason" />
+              <input value={rejectText} onChange={(event) => onRejectText(event.target.value)} placeholder={labels.rejectReason} />
               <div className="sbg-choice-list">
                 <button type="button" disabled={busy} onClick={() => onRun("approve")}>
-                  Approve
+                  {labels.approve}
                 </button>
                 <button type="button" disabled={busy} onClick={() => onRun(`reject ${rejectText}`.trim())}>
-                  Reject
+                  {labels.reject}
                 </button>
               </div>
             </>
           ) : (
-            <p className="sbg-muted">Waiting for {actorName(reviewer, labels)} review.</p>
+            <p className="sbg-muted">
+              {labels.waitingReview}: {actorName(reviewer, labels)}
+            </p>
           )}
         </>
       ) : pendingActor === "player" ? (
         <>
-          <textarea value={reviewText} onChange={(event) => onReviewText(event.target.value)} placeholder={pending.submission || "Submit your response"} />
+          <textarea value={reviewText} onChange={(event) => onReviewText(event.target.value)} placeholder={pending.submission || labels.submitResponse} />
           <div className="sbg-choice-list">
             <button type="button" disabled={busy || !reviewText.trim()} onClick={() => onRun(`submit ${reviewText}`)}>
-              Submit
+              {labels.submit}
             </button>
             {playerCanPass ? (
               <button type="button" disabled={busy} onClick={() => onRun("pass")}>
-                Use Pass Card
+                {labels.usePass}
               </button>
             ) : null}
           </div>
         </>
       ) : (
-        <p className="sbg-muted">Waiting for {actorName(pendingActor, labels)} submission.</p>
+        <p className="sbg-muted">
+          {labels.waitingSubmission}: {actorName(pendingActor, labels)}
+        </p>
       )}
     </section>
   );
@@ -574,7 +654,7 @@ function PendingPanel({
 function makeRows(cells: BoardCell[], boardSize: number, columns: number) {
   const source = cells.length
     ? cells
-    : Array.from({ length: boardSize }, (_, index) => ({ position: index + 1, kind: "empty", name: "Empty" }));
+    : Array.from({ length: boardSize }, (_, index) => ({ position: index + 1, kind: "empty", name: "" }));
   const rows: BoardCell[][] = [];
   for (let index = 0; index < source.length; index += columns) {
     const row = source.slice(index, index + columns);
@@ -600,7 +680,7 @@ function actorName(actor: Actor | string, labels: Required<SeseBoardLabels>) {
 
 function leadLabel(state: SeseBoardState | undefined, labels: Required<SeseBoardLabels>) {
   const lead = state?.theme_profile?.lead || state?.theme_profile?.direction;
-  if (!lead) return "TBD";
+  if (!lead) return labels.noLead;
   return actorName(String(lead), labels);
 }
 
@@ -622,12 +702,12 @@ function tileIcon(kind: string) {
   return "";
 }
 
-function recentLine(text: string | undefined) {
+function recentLine(text: string | undefined, fallback: string) {
   const line = String(text || "")
     .split(/\r?\n/)
     .map((item) => item.trim())
     .find((item) => item && !item.startsWith("Progress:"));
-  return line || "Ready.";
+  return line || fallback;
 }
 
 function appendMessage(setter: React.Dispatch<React.SetStateAction<ChatMessage[]>>, speaker: ChatMessage["speaker"], text: string) {

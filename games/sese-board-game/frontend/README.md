@@ -15,8 +15,8 @@ export function GamePage() {
 }
 ```
 
-For an AI player, pass `sendToAssistant`. The component accepts natural model
-text, but only bracketed command lines are executed:
+For an automated counterpart, pass `sendToAssistant`. The component accepts
+natural model text, but only bracketed command lines are executed:
 
 ```text
 [ROLL]
