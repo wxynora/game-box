@@ -55,6 +55,38 @@ def _status_label(slot: str) -> str:
     return str(SLOTS.get(slot, {}).get("label") or slot)
 
 
+def _status_title(item: dict[str, Any]) -> str:
+    slot = str(item.get("slot") or "")
+    if slot == "prop":
+        return "道具惩罚"
+    if slot == "limit":
+        return "限制"
+    if slot == "task":
+        return "任务状态"
+    if slot == "pose":
+        return "姿势锁定"
+    if slot == "place":
+        return "地点状态"
+    return str(item.get("label") or _status_label(slot) or "状态")
+
+
+def _format_status_item(item: dict[str, Any], *, include_duration: bool = True) -> str:
+    title = _status_title(item)
+    value = str(item.get("value") or "未指定")
+    level = int(item.get("level") or 1)
+    details: list[str] = []
+    if level > 1:
+        details.append(f"{level}档")
+    if include_duration:
+        duration = str(item.get("duration_type") or "")
+        if duration == "actions":
+            details.append(f"停步剩余 {int(item.get('remaining_actions') or 0)} 次")
+        elif duration:
+            details.append(_duration_label(duration))
+    suffix = f"（{'，'.join(details)}）" if details else ""
+    return f"{title}：{value}{suffix}"
+
+
 def _compact_text(lines: Iterable[str]) -> str:
     return "\n".join(line for line in lines if line).strip()
 
@@ -449,7 +481,7 @@ def _add_status(state: dict[str, Any], actor: str, slot: str, duration_type: str
         "blocks_action": False,
     }
     state["statuses"].setdefault(actor, []).append(item)
-    return f"{_actor_label(actor, labels)}新增{_status_label(slot)}：{value}。"
+    return f"{_actor_label(actor, labels)}新增状态：{_format_status_item(item)}。"
 
 
 def _add_block(state: dict[str, Any], actor: str, slot: str, actions: int, labels: dict[str, str]) -> str:
@@ -465,7 +497,7 @@ def _add_block(state: dict[str, Any], actor: str, slot: str, actions: int, label
         "blocks_action": True,
     }
     state["statuses"].setdefault(actor, []).append(item)
-    return f"{_actor_label(actor, labels)}受到「{value}」影响，失去 {item['remaining_actions']} 次行动。"
+    return f"{_actor_label(actor, labels)}新增停步状态：{_format_status_item(item)}。"
 
 
 def _status_value(state: dict[str, Any], slot: str) -> str:
@@ -488,7 +520,7 @@ def _clear_status(state: dict[str, Any], actor: str, labels: dict[str, str]) -> 
         return f"{_actor_label(actor, labels)}当前没有可解除状态。"
     index = _rng_int(state, 0, len(statuses) - 1)
     removed = statuses.pop(index)
-    return f"已解除{_actor_label(actor, labels)}的{removed.get('label')}：{removed.get('value')}。"
+    return f"已解除{_actor_label(actor, labels)}的状态：{_format_status_item(removed, include_duration=False)}。"
 
 
 def _extend_status(state: dict[str, Any], actor: str, labels: dict[str, str]) -> str:
@@ -498,9 +530,9 @@ def _extend_status(state: dict[str, Any], actor: str, labels: dict[str, str]) ->
     item = statuses[_rng_int(state, 0, len(statuses) - 1)]
     if item.get("duration_type") == "actions":
         item["remaining_actions"] = int(item.get("remaining_actions") or 0) + 1
-        return f"{_actor_label(actor, labels)}的{item.get('label')}额外延长 1 次停步。"
+        return f"{_actor_label(actor, labels)}的状态已延长：{_format_status_item(item)}。"
     item["level"] = int(item.get("level") or 1) + 1
-    return f"{_actor_label(actor, labels)}的{item.get('label')}上调到 {item['level']} 档。"
+    return f"{_actor_label(actor, labels)}的状态已加码：{_format_status_item(item)}。"
 
 
 def _assign_review_penalty(state: dict[str, Any], actor: str, position: int, labels: dict[str, str]) -> str:
@@ -671,7 +703,7 @@ def _upgrade_status_level(state: dict[str, Any], actor: str, slot: str, delta: i
     for item in reversed(state["statuses"].get(actor, [])):
         if item.get("slot") == slot:
             item["level"] = int(item.get("level") or 1) + int(delta)
-            return f"{_actor_label(actor, labels)}的{item.get('label')}上调到 {item['level']} 档。"
+            return f"{_actor_label(actor, labels)}的状态已加码：{_format_status_item(item)}。"
     return _add_status(state, actor, slot, "until_clear", labels)
 
 
@@ -769,15 +801,7 @@ def _statuses_line(state: dict[str, Any], actor: str, labels: dict[str, str]) ->
         return f"{_actor_label(actor, labels)}状态：无"
     parts = []
     for item in statuses:
-        duration = item.get("duration_type")
-        tail = ""
-        if duration == "actions":
-            tail = f"，剩余 {int(item.get('remaining_actions') or 0)} 次行动"
-        elif duration:
-            tail = f"，{_duration_label(str(duration))}"
-        level = int(item.get("level") or 1)
-        level_text = f"（{level}档）" if level > 1 else ""
-        parts.append(f"{item.get('label')}: {item.get('value')}{level_text}{tail}")
+        parts.append(_format_status_item(item))
     return f"{_actor_label(actor, labels)}状态：" + "；".join(parts)
 
 
@@ -785,7 +809,7 @@ def _duration_label(duration: str) -> str:
     if duration == "until_clear":
         return "待解除"
     if duration == "until_finish":
-        return "到终点"
+        return "到终点前有效"
     if duration == "actions":
         return "按行动次数"
     return duration

@@ -539,9 +539,7 @@ function StatusCard({
         {statuses.length ? (
           statuses.map((item, index) => (
             <span className="sbg-tag" key={item.id || `${item.slot}-${index}`}>
-              {item.label || item.slot}: {item.value}
-              {item.level && item.level > 1 ? `（${item.level}档）` : ""}
-              {item.duration_type === "actions" ? ` / ${labels.actionLeft} ${item.remaining_actions || 0}` : ""}
+              {formatStatusItem(item)}
             </span>
           ))
         ) : (
@@ -649,6 +647,32 @@ function PendingPanel({
       )}
     </section>
   );
+}
+
+function formatStatusItem(item: StatusItem) {
+  const title = statusTitle(item);
+  const value = item.value || "未指定";
+  const details: string[] = [];
+  if (item.level && item.level > 1) details.push(`${item.level}档`);
+  const duration = statusDuration(item);
+  if (duration) details.push(duration);
+  return `${title}：${value}${details.length ? `（${details.join("，")}）` : ""}`;
+}
+
+function statusTitle(item: StatusItem) {
+  if (item.slot === "prop") return "道具惩罚";
+  if (item.slot === "limit") return "限制";
+  if (item.slot === "task") return "任务状态";
+  if (item.slot === "pose") return "姿势锁定";
+  if (item.slot === "place") return "地点状态";
+  return item.label || item.slot || "状态";
+}
+
+function statusDuration(item: StatusItem) {
+  if (item.duration_type === "actions") return `停步剩余 ${Math.max(0, Number(item.remaining_actions || 0))} 次`;
+  if (item.duration_type === "until_clear") return "待解除";
+  if (item.duration_type === "until_finish") return "到终点前有效";
+  return "";
 }
 
 function makeRows(cells: BoardCell[], boardSize: number, columns: number) {
