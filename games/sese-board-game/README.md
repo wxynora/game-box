@@ -4,8 +4,8 @@ A portable roll-and-move board game core with optional AI/tool and React UI
 adapters.
 
 This open-source version is intentionally separated from any private chat
-system, memory system, body-state system, deployment route, or private content
-library. The included card pack is a clean sample pack. Projects that embed the
+system, memory system, body-state system, deployment route, or private names.
+The included card pack is an open sample content pack. Projects that embed the
 game can replace `sese_board_game/cards.py` with their own content.
 
 ## What It Does
