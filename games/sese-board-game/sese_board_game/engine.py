@@ -75,7 +75,7 @@ def _format_status_item(item: dict[str, Any], *, include_duration: bool = True) 
     value = str(item.get("value") or "未指定")
     level = int(item.get("level") or 1)
     details: list[str] = []
-    if level > 1:
+    if str(item.get("slot") or "") == "prop" and level > 1:
         details.append(f"{level}档")
     if include_duration:
         duration = str(item.get("duration_type") or "")

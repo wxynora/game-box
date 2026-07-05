@@ -653,7 +653,7 @@ function formatStatusItem(item: StatusItem) {
   const title = statusTitle(item);
   const value = item.value || "未指定";
   const details: string[] = [];
-  if (item.level && item.level > 1) details.push(`${item.level}档`);
+  if (item.slot === "prop" && item.level && item.level > 1) details.push(`${item.level}档`);
   const duration = statusDuration(item);
   if (duration) details.push(duration);
   return `${title}：${value}${details.length ? `（${details.join("，")}）` : ""}`;
