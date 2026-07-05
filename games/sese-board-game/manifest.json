@@ -1,0 +1,19 @@
+{
+  "id": "sese-board-game",
+  "name": "Sese Board Game",
+  "version": "0.1.0",
+  "entrypoint": "sese_board_game.engine:cmd",
+  "tool_adapter": "sese_board_game.tool_adapter",
+  "frontend": "frontend/SeseBoardGame.tsx",
+  "license": "MIT",
+  "features": [
+    "36-cell roll-and-move board",
+    "JSON save/load",
+    "command interface",
+    "pass cards",
+    "review penalties",
+    "choice penalties",
+    "status tracking",
+    "optional React UI"
+  ]
+}

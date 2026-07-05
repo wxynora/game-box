@@ -18,6 +18,11 @@ try to provide:
 - `packages/`: lightweight shared packages used by multiple games.
 - `docs/`: repo conventions, integration notes, and release notes.
 
+## Games
+
+- `games/sese-board-game/`: a portable roll-and-move board game with a Python
+  rules engine, command/tool adapter, tests, and a reusable React UI component.
+
 ## Integration Boundary
 
 Open-source games in this repo are responsible only for rules, state
