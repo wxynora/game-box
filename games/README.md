@@ -1,8 +1,8 @@
-# games
+# Games
 
-每个小游戏一个子目录。
+Each game lives in its own subdirectory.
 
-建议结构：
+Suggested structure:
 
 ```text
 games/example-game/
@@ -14,9 +14,9 @@ games/example-game/
   frontend/
 ```
 
-最小要求：
+Minimum requirements:
 
-- 规则引擎能脱离私有后端运行。
-- 状态存储路径可配置。
-- 玩家视角文本和 AI/工具视角文本分开。
-- 不提交私有 token、账号、聊天记录或部署配置。
+- The rules engine can run without a private backend.
+- State storage paths are configurable.
+- Player-facing text and AI/tool-facing text are separated.
+- No private tokens, accounts, chat logs, or deployment config are committed.

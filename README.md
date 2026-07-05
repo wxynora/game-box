@@ -1,32 +1,36 @@
-# 游戏盒子
+# Game Box
 
-游戏盒子是一个独立的开源小游戏集合仓库。
+Game Box is an open-source collection repo for small reusable games.
 
-这里放可复用、可移植的小游戏核心，不绑定任何私有后端、聊天系统、记忆系统或个人部署环境。每个游戏都应该尽量提供：
+This repo keeps portable game cores that are not tied to any private backend,
+chat system, memory system, or personal deployment environment. Each game should
+try to provide:
 
-- 可独立运行的规则引擎
-- 命令式入口，例如 `cmd("roll")`
-- 可选的工具 schema / adapter，方便接入不同 AI 或后端
-- 前端示例或可复制的 UI 组件
-- 简短测试和最小使用说明
+- A standalone rules engine
+- A command-style entry point, such as `cmd("roll")`
+- Optional tool schemas / adapters for different AI or backend integrations
+- A frontend example or reusable UI component
+- Focused tests and minimal usage notes
 
-## 目录
+## Structure
 
-- `games/`：具体小游戏。每个游戏一个子目录。
-- `packages/`：多个游戏共用的轻量工具包。
-- `docs/`：仓库规范、接入说明和发布记录。
+- `games/`: individual games, one subdirectory per game.
+- `packages/`: lightweight shared packages used by multiple games.
+- `docs/`: repo conventions, integration notes, and release notes.
 
-## 接入边界
+## Integration Boundary
 
-开源游戏只负责游戏规则、状态流转、玩家可见文本和可选 UI。
+Open-source games in this repo are responsible only for rules, state
+transitions, player-facing text, and optional UI.
 
-不会包含私有内容：
+They should not include private project details:
 
-- 私人聊天窗口、账号、token 或部署配置
-- 动态记忆、身体状态、归档、主动唤醒等私有链路
-- 任何只适用于单个私有项目的后端路由
+- Private chat windows, accounts, tokens, or deployment config
+- Dynamic memory, body state, archives, proactive wakeups, or other private flows
+- Backend routes that only make sense inside one private project
 
-其他项目接入时，可以直接调用游戏的 `cmd()` 入口，或使用对应的 tool adapter。
+Other projects can integrate a game by calling its `cmd()` entry point or by
+using its tool adapter.
 
 ## License
 

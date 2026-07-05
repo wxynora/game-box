@@ -1,5 +1,5 @@
-# packages
+# Packages
 
-这里放多个小游戏共用的轻量代码。
+Shared lightweight code for multiple games belongs here.
 
-暂时保持为空，等两个以上游戏真的复用同一段逻辑时再抽出来。
+Keep this empty until two or more games actually share the same logic.

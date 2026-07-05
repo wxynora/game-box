@@ -1,10 +1,10 @@
-# docs
+# Docs
 
-这里放开源游戏盒子的规范、迁移说明和发布记录。
+Repo conventions, migration notes, and release notes live here.
 
-优先写能让别人接入的内容：
+Prefer docs that help other projects integrate the games:
 
-- 游戏 manifest 约定
-- `cmd()` 入口约定
-- tool adapter 约定
-- 前端 API base 配置说明
+- Game manifest conventions
+- `cmd()` entry point conventions
+- Tool adapter conventions
+- Frontend API base configuration
