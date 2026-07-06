@@ -609,10 +609,16 @@ function parseAssistantDirective(text: string): AssistantDirective {
   if (firstIndex < 0) return { kind: "", body: "" };
   const first = lines[firstIndex].trim();
   const body = directiveBody(lines, firstIndex + 1);
+  const descriptionOnlyMatch = first.match(/^【描述[:：](.*)】$/);
+  if (descriptionOnlyMatch) return { kind: "submit", body: descriptionOnlyMatch[1].trim() || body };
+  const truthQuestionMatch = first.match(/^【真心话出题[:：](.*)】$/);
+  if (truthQuestionMatch) return { kind: "submit", body: truthQuestionMatch[1].trim() || body };
+  const truthAnswerMatch = first.match(/^【真心话回答[:：](.*)】$/);
+  if (truthAnswerMatch) return { kind: "submit", body: truthAnswerMatch[1].trim() || body };
   if (first === "【掷骰】") return { kind: "roll", body };
   if (first === "【提交】") return { kind: "submit", body };
   if (first === "【通过】") return { kind: "approve", body };
-  if (first === "【不通过】") return { kind: "reject", body };
+  if (first === "【不通过】" || first === "【打回】" || first === "【驳回】") return { kind: "reject", body };
   if (first === "【Pass】" || first === "【PASS】" || first === "【使用Pass卡】") return { kind: "pass", body };
   const choiceMatch = first.match(/^【选择[:：](.+)】$/);
   if (choiceMatch) return { kind: "choose", choice: choiceMatch[1].trim(), body };
@@ -764,6 +770,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const [chatUnread, setChatUnread] = useState(0);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [assistantSyncing, setAssistantSyncing] = useState(false);
   const [finalNoteOpen, setFinalNoteOpen] = useState(false);
   const [finalNoteSeenKey, setFinalNoteSeenKey] = useState("");
   const [toyConsoleOpen, setToyConsoleOpen] = useState(false);
@@ -1082,14 +1089,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   ) => {
     const assistantPending = isAssistantPendingState(stateForReply);
     if (!isAssistantTurnState(stateForReply) || (stateForReply?.pending_event && !assistantPending)) return;
-    appendChat({
-      id: makeChatId("system"),
-      speaker: "system",
-      text: assistantPending
-        ? (localPreviewEnabled ? "预览模式：轮到对方处理任务，已继续同步。" : "轮到对方处理任务，已同步给对方。")
-        : (localPreviewEnabled ? "预览模式：轮到对方行动，已继续同步。" : "轮到对方行动，已同步给对方。"),
-    }, true);
-    setChatSending(true);
+    setAssistantSyncing(true);
     try {
       const next = await syncSeseBoardWithAssistant({
         mode: "state_update",
@@ -1110,9 +1110,9 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       appendChat({ id: makeChatId("system"), speaker: "system", text: `对方行动同步失败：${error}` }, true);
       toast(`对方行动同步失败：${error}`);
     } finally {
-      setChatSending(false);
+      setAssistantSyncing(false);
     }
-  }, [appendChat, applyPayload, localPreviewEnabled, processAssistantReply, syncSeseBoardWithAssistant, toast]);
+  }, [appendChat, applyPayload, processAssistantReply, syncSeseBoardWithAssistant, toast]);
 
   useEffect(() => {
     continueAssistantTurnRef.current = continueAssistantTurn;
@@ -1129,16 +1129,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
 
   const notifyRollResultToAssistant = useCallback(async (rolled: SeseBoardPayload, message = "你刚掷完骰子。") => {
     const rollText = plainText(rolled.text || rolled.ai_text || rolled.player_text || "").trim();
-    appendChat({
-      id: makeChatId("system"),
-      speaker: "system",
-      text: localPreviewEnabled
-        ? "预览模式：已同步这次棋局。"
-        : message.includes("掷")
-          ? "已把这次掷骰结果和当前棋局发给对方。"
-          : "已把棋局变化发给对方。",
-    }, true);
-    setChatSending(true);
+    setAssistantSyncing(true);
     try {
       const next = await syncSeseBoardWithAssistant({
         mode: "roll_result",
@@ -1159,9 +1150,9 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       appendChat({ id: makeChatId("system"), speaker: "system", text: `自动同步失败：${message}` }, true);
       toast(`自动同步给对方失败：${message}`);
     } finally {
-      setChatSending(false);
+      setAssistantSyncing(false);
     }
-  }, [appendChat, applyPayload, localPreviewEnabled, processAssistantReply, syncSeseBoardWithAssistant, toast]);
+  }, [appendChat, applyPayload, processAssistantReply, syncSeseBoardWithAssistant, toast]);
 
   const rollOnce = useCallback(async (options: { notifyAfterUserRoll?: boolean } = {}) => {
     if (busy || animating || isGameOver) return;
@@ -1312,7 +1303,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
 
   const sendFinalNote = useCallback(async () => {
     const note = payload?.state?.final_note || null;
-    if (chatSending || busy || animating || !payload?.state || !note || note.sent) return;
+    if (chatSending || assistantSyncing || busy || animating || !payload?.state || !note || note.sent) return;
     setChatSending(true);
     try {
       const next = await syncSeseBoardWithAssistant({
@@ -1337,10 +1328,10 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     } finally {
       setChatSending(false);
     }
-  }, [animating, appendChat, applyPayload, busy, chatSending, localPreviewEnabled, payload, syncSeseBoardWithAssistant, toast]);
+  }, [animating, appendChat, applyPayload, busy, chatSending, assistantSyncing, localPreviewEnabled, payload, syncSeseBoardWithAssistant, toast]);
 
   const appendFinalStatus = useCallback(async (slot: FinalAppendSlot, value: string, level = 1) => {
-    if (chatSending || busy || animating || !payload?.state) return;
+    if (chatSending || assistantSyncing || busy || animating || !payload?.state) return;
     const cleanValue = value.replace(/\s+/g, " ").trim();
     if (!cleanValue) {
       toast("先选要追加的内容。");
@@ -1360,10 +1351,10 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     } finally {
       setBusy(false);
     }
-  }, [animating, applyPayload, busy, chatSending, payload?.state, toast]);
+  }, [animating, applyPayload, busy, chatSending, assistantSyncing, payload?.state, toast]);
 
   const removeFinalStatus = useCallback(async (slot: FinalAppendSlot, value: string) => {
-    if (chatSending || busy || animating || !payload?.state) return;
+    if (chatSending || assistantSyncing || busy || animating || !payload?.state) return;
     const cleanValue = value.replace(/\s+/g, " ").trim();
     if (!cleanValue) return;
     setBusy(true);
@@ -1377,10 +1368,10 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     } finally {
       setBusy(false);
     }
-  }, [animating, applyPayload, busy, chatSending, payload?.state, toast]);
+  }, [animating, applyPayload, busy, chatSending, assistantSyncing, payload?.state, toast]);
 
   const sendGameChat = useCallback(async () => {
-    if (chatSending || busy || animating || !payload?.state) return;
+    if (chatSending || assistantSyncing || busy || animating || !payload?.state) return;
     const message = chatInput.trim();
     if (!message) return;
     const userChatMessage: GameChatMessage = { id: makeChatId("player"), speaker: "player", text: message };
@@ -1408,7 +1399,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     } finally {
       setChatSending(false);
     }
-  }, [animating, appendChat, applyPayload, busy, chatInput, chatSending, payload, processAssistantReply, syncSeseBoardWithAssistant, toast]);
+  }, [animating, appendChat, applyPayload, busy, chatInput, chatSending, assistantSyncing, payload, processAssistantReply, syncSeseBoardWithAssistant, toast]);
 
   const themeName = displayText(state.theme_profile?.theme || "未触发");
   const directionLabel = displayText(state.theme_profile?.direction_label || "待定");
@@ -1441,8 +1432,9 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     ai: actorPaused(state.statuses?.ai),
   };
   const canProcessAssistantPause = isAssistantTurn && pausedByActor.ai && !pendingEvent;
-  const rollDisabled = busy || animating || chatSending || !payload?.state || Boolean(pendingEvent) || (isAssistantTurn && !canProcessAssistantPause);
-  const chatDisabled = chatSending || busy || animating || !payload?.state;
+  const rollDisabled = busy || animating || chatSending || assistantSyncing || !payload?.state || Boolean(pendingEvent) || (isAssistantTurn && !canProcessAssistantPause);
+  const chatInputDisabled = !payload?.state;
+  const chatSubmitDisabled = chatSending || assistantSyncing || busy || animating || !payload?.state;
 
   return (
     <div className={["sese-game", className].filter(Boolean).join(" ")} ref={gameRef}>
@@ -1525,12 +1517,12 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             disabled={rollDisabled}
             onClick={isGameOver ? startNewGame : () => void rollOnce({ notifyAfterUserRoll: true })}
           >
-            {isGameOver ? "开新局" : pendingEvent ? "先处理任务" : canProcessAssistantPause ? "处理停步" : isAssistantTurn ? "等对方掷骰" : busy || animating ? "移动中" : chatSending ? "等对方回应" : "掷骰子"}
+            {isGameOver ? "开新局" : pendingEvent ? "先处理任务" : canProcessAssistantPause ? "处理停步" : isAssistantTurn ? "等对方掷骰" : busy || animating ? "移动中" : chatSending || assistantSyncing ? "等对方回应" : "掷骰子"}
           </button>
           <button
             className="sese-restart-button"
             type="button"
-            disabled={busy || animating || chatSending}
+            disabled={busy || animating || chatSending || assistantSyncing}
             onClick={startNewGame}
           >
             重开
@@ -1573,11 +1565,11 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             }}>
               <input
                 value={chatInput}
-                disabled={chatDisabled}
+                disabled={chatInputDisabled}
                 placeholder="和对方说一句游戏内的话"
                 onChange={(event) => setChatInput(event.target.value)}
               />
-              <button type="submit" disabled={chatDisabled || !chatInput.trim()} aria-label={chatSending ? "发送中" : "发送"}>
+              <button type="submit" disabled={chatSubmitDisabled || !chatInput.trim()} aria-label={chatSending ? "发送中" : "发送"}>
                 <SendIconMini />
               </button>
             </form>
@@ -1628,7 +1620,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
               passCount={myPassCount}
               passSkipsUsed={passSkipsUsed}
               submission={pendingSubmission}
-              disabled={busy}
+              disabled={busy || assistantSyncing}
               onSubmissionChange={setPendingSubmission}
               onSubmit={submitPending}
               onApprove={approvePending}
@@ -1656,7 +1648,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             {finalNote.sent ? (
               <em>已发送给对方</em>
             ) : (
-              <button className="sese-final-note-send" type="button" disabled={chatSending || busy || animating} onClick={() => void sendFinalNote()}>
+              <button className="sese-final-note-send" type="button" disabled={chatSending || assistantSyncing || busy || animating} onClick={() => void sendFinalNote()}>
                 {chatSending ? "发送中" : "发送给对方"}
               </button>
             )}
@@ -1668,7 +1660,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         <ToyConsoleSheet
           level={toyConsoleLevel}
           activeProps={activeFinalProps}
-          disabled={chatSending || busy || animating}
+          disabled={chatSending || assistantSyncing || busy || animating}
           onClose={() => setToyConsoleOpen(false)}
           onLevelChange={setToyConsoleLevel}
           onToggleProp={(value, active) => {
@@ -3933,7 +3925,6 @@ function PendingEventPanel({
             <p>{questionPrompt}</p>
             <textarea
               value={submission}
-              disabled={disabled}
               placeholder="写下你的问题"
               onChange={(event) => onSubmissionChange(event.target.value)}
             />
@@ -3965,7 +3956,6 @@ function PendingEventPanel({
           {!hasQuestionText && submissionHint ? <div className="sese-pending-tip">提交要求：{submissionHint}</div> : null}
           <textarea
             value={submission}
-            disabled={disabled}
             placeholder={hasQuestionText ? "在这里写回答" : "在这里写提交内容"}
             onChange={(event) => onSubmissionChange(event.target.value)}
           />
