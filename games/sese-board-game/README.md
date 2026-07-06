@@ -279,6 +279,7 @@ roll -> 触发惩罚任务 -> submit <内容> -> 对方 approve/reject
 ```
 
 如果对方 `reject`，任务不会结束，需要重新 `submit`。
+如果对方 `approve` 后轮到对方继续行动，对方应该在同一条回复里继续给出 `roll` 指令。
 
 真心话类任务有出题阶段：
 
@@ -341,7 +342,7 @@ remove_final_status prop 眼罩
 4. 前端用 `payload.state` 刷新 UI。
 5. 如果轮到 AI 或需要 AI 处理任务，把 `payload["ai_text"]` 发进 AI 的下一轮上下文。
 6. AI 回复时，第一行必须是游戏指令，后面才是普通聊天。
-7. 宿主只解析第一行指令，一次最多执行一个游戏命令。
+7. 宿主通常只解析第一行指令；唯一例外是 AI 验收通过真人任务时，可以同条回复 `【通过】` 和 `【掷骰】`，宿主应先执行 `approve` 再执行 `roll`。
 8. 保存局内聊天时，把第一行指令剥掉，只保存正文。
 9. 如果执行后轮到真人，就停下来等真人。
 10. 如果 AI 因暂停状态连续无法行动，宿主可以继续执行 `roll` 消耗停步，直到轮到真人或 AI 恢复行动。
@@ -370,16 +371,21 @@ AI 回复示例：
 【剪刀石头布：剪刀】
 【剪刀石头布：布】
 【提交】
+【真心话出题：题目内容】
+【真心话回答：回答内容】
+【描述：提交内容】
 【通过】
-【不通过】
-【不通过：原因】
+【打回】
 【Pass】
 ```
 
 说明：
 
 - `【提交】` 后面的正文会作为 `submit <正文>`。
-- `【不通过：原因】` 会作为 `reject <原因>`。
+- `【真心话出题：...】` 和 `【真心话回答：...】` 会作为 `submit ...`，用于真心话出题和回答。
+- `【描述：...】` 只用于需要长篇正文的提交类惩罚，例如 `反向诱惑`、`全部暴露！`、`羞耻台词大放送`、`自慰陈述`。
+- `【打回】` 会作为 `reject`；打回后对方需要重新提交，不掷骰。
+- AI 验收真人提交时，如果通过，应回复两行：第一行 `【通过】`，第二行 `【掷骰】`；宿主先执行 `approve`，再执行 `roll`。
 - `【选择：...】` 会作为 `choose ...`。
 - `【剪刀石头布：...】` 也是 `choose ...`，只是用于对抗事件。
 
@@ -403,9 +409,11 @@ def handle_human_roll(save_path, call_ai):
 
 
 def handle_ai_message(content, save_path):
-    first_line, _, body = content.partition("\n")
-    first_line = first_line.strip()
-    chat_text = body.strip()
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    first_line = lines[0] if lines else ""
+    other_lines = lines[1:]
+    chat_lines = [line for line in other_lines if line != "【掷骰】"]
+    chat_text = "\n".join(chat_lines).strip()
 
     command = None
     if first_line == "【掷骰】":
@@ -414,13 +422,18 @@ def handle_ai_message(content, save_path):
         command = "choose " + first_line.removeprefix("【选择：").removesuffix("】").strip()
     elif first_line.startswith("【剪刀石头布：") and first_line.endswith("】"):
         command = "choose " + first_line.removeprefix("【剪刀石头布：").removesuffix("】").strip()
+    elif first_line.startswith("【真心话出题：") and first_line.endswith("】"):
+        command = "submit " + first_line.removeprefix("【真心话出题：").removesuffix("】").strip()
+    elif first_line.startswith("【真心话回答：") and first_line.endswith("】"):
+        command = "submit " + first_line.removeprefix("【真心话回答：").removesuffix("】").strip()
+    elif first_line.startswith("【描述：") and first_line.endswith("】"):
+        command = "submit " + first_line.removeprefix("【描述：").removesuffix("】").strip()
     elif first_line == "【提交】":
         command = "submit " + chat_text
     elif first_line == "【通过】":
         command = "approve"
-    elif first_line.startswith("【不通过"):
-        reason = first_line.removeprefix("【不通过").removesuffix("】").lstrip("：:").strip()
-        command = "reject " + (reason or chat_text)
+    elif first_line == "【打回】":
+        command = "reject " + chat_text if chat_text else "reject"
     elif first_line in {"【Pass】", "【PASS】"}:
         command = "pass"
 
@@ -429,6 +442,8 @@ def handle_ai_message(content, save_path):
         return run_command("status", save_path=save_path)
 
     payload = run_command(command, save_path=save_path)
+    if first_line == "【通过】" and "【掷骰】" in other_lines and payload["state"]["turn_actor"] == "ai":
+        payload = run_command("roll", save_path=save_path)
     if chat_text:
         save_ingame_chat(chat_text)
     return payload
@@ -436,7 +451,7 @@ def handle_ai_message(content, save_path):
 
 关键点：
 
-- 一条 AI 消息最多执行一个游戏命令。
+- 一条 AI 消息通常只执行一个游戏命令；唯一例外是 `【通过】` 后同条带 `【掷骰】`。
 - 命令行要剥离，避免污染局内聊天。
 - `payload["ai_text"]` 是游戏上下文，不等于普通聊天历史。
 - 游戏日志、状态、棋盘 JSON 不要归档进普通近期记忆。
