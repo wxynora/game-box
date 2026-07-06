@@ -650,29 +650,37 @@ function firstPendingChoice(pending: PendingEvent | null | undefined, fallback =
   return String(first?.id || first?.label || fallback).trim();
 }
 
+const LONG_DESCRIPTION_REVIEW_TASKS = new Set(["反向诱惑", "全部暴露！", "羞耻台词大放送", "自慰陈述"]);
+
 function localAssistantReplyForState(mode: SeseBoardSyncMode, state: SeseBoardState | undefined): string {
   if (mode === "final_note") {
     return "本地预览：终局小纸条收到了。";
   }
   const pending = state?.pending_event || null;
   if (pending?.type === "duel" && pending.current_actor === "ai") {
-    return "【剪刀石头布：石头】\n【描述：本地预览：我出石头。】";
+    return "【剪刀石头布：石头】";
   }
   if (pending?.type === "choice" && pending.actor === "ai") {
     const choice = firstPendingChoice(pending, "");
-    if (choice) return `【选择：${choice}】\n【描述：本地预览：我选这个。】`;
+    if (choice) return `【选择：${choice}】`;
   }
   if (pending?.type === "review" && pending.reviewer === "ai" && pending.phase === "questioning") {
-    return "【提交】\n【描述：本地预览：对方想问你的真心话问题。】";
+    return "【真心话出题：本地预览：对方想问你的真心话问题。】";
   }
   if (pending?.type === "review" && pending.actor === "ai" && pending.phase === "assigned") {
-    return "【提交】\n【描述：本地预览：对方已经完成任务，提交给你验收。】";
+    if (pending.name === "真心话点名") {
+      return "【真心话回答：本地预览：对方已经回答真心话。】";
+    }
+    if (LONG_DESCRIPTION_REVIEW_TASKS.has(String(pending.name || ""))) {
+      return "【描述：本地预览：对方已经完成任务，提交给你验收。】";
+    }
+    return "【提交】\n本地预览：对方已经完成任务，提交给你验收。";
   }
   if (pending?.type === "review" && pending.reviewer === "ai" && pending.phase === "submitted") {
-    return "【通过】\n【描述：本地预览：这次算你通过。】";
+    return "【通过】";
   }
   if (isAssistantTurnState(state)) {
-    return "【掷骰】\n【描述：本地预览：我来掷这一回合。】";
+    return "【掷骰】";
   }
   return "本地预览：我看到了，等你继续行动。";
 }
@@ -1288,7 +1296,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       success: isDuel ? "已出拳，等待对方出拳。" : "已选择惩罚，棋局继续。",
       notify: true,
       notifyMessage: isDuel
-        ? "你已在剪刀石头布对抗中出拳。请第一行单独发送【剪刀石头布：石头】、【剪刀石头布：剪刀】或【剪刀石头布：布】；描述另起一行写成【描述：...】。"
+        ? "你已在剪刀石头布对抗中出拳。请第一行单独发送【剪刀石头布：石头】、【剪刀石头布：剪刀】或【剪刀石头布：布】。"
         : "你处理完选择惩罚，棋局继续。",
     });
   }, [executePendingCommand, pendingEvent?.actor, pendingEvent?.current_actor, pendingEvent?.type, toast]);
