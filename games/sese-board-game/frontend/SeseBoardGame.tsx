@@ -943,38 +943,13 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     };
   }, [executeSeseBoard, localPreviewEnabled, sendToAssistant]);
 
-  const processLocalAssistantPending = useCallback(async () => {
-    if (busy || animating || chatSending || !payload?.state) return;
-    const pending = payload.state.pending_event || null;
-    const needsAssistantReply = Boolean(
-      isAssistantTurnState(payload.state)
-        || (pending?.type === "choice" && pending.actor === "ai")
-        || (pending?.type === "duel" && pending.current_actor === "ai")
-        || (pending?.type === "review" && pending.actor === "ai" && pending.phase === "assigned")
-        || (pending?.type === "review" && pending.reviewer === "ai" && ["questioning", "submitted"].includes(String(pending.phase || ""))),
-    );
-    if (!needsAssistantReply) {
-      toast("当前没有需要模拟对方回应的内容。");
-      return;
-    }
-    setChatSending(true);
-    setPopup(null);
-    try {
-      await processAssistantReply(localAssistantReplyForState("chat", payload.state), payload.state);
-    } catch (e: any) {
-      toast(`本地模拟对方回应失败：${e?.message || e}`);
-    } finally {
-      setChatSending(false);
-    }
-  }, [animating, busy, chatSending, payload?.state, processAssistantReply, toast]);
-
   const notifyRollResultToAssistant = useCallback(async (rolled: SeseBoardPayload, message = "你刚掷完骰子。") => {
     const rollText = plainText(rolled.text || rolled.ai_text || rolled.player_text || "").trim();
     appendChat({
       id: makeChatId("system"),
       speaker: "system",
       text: localPreviewEnabled
-        ? "本地模拟对方已收到这次棋局同步。"
+        ? "预览模式：已同步这次棋局。"
         : message.includes("掷")
           ? "已把这次掷骰结果和当前棋局发给对方。"
           : "已把棋局变化发给对方。",
@@ -1149,7 +1124,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           player_text: next.player_text || payload.player_text || "",
         });
       }
-      appendChat({ id: makeChatId("system"), speaker: "system", text: localPreviewEnabled ? "终局小纸条已本地发送给模拟对方。" : "终局小纸条已发送给对方。" }, true);
+      appendChat({ id: makeChatId("system"), speaker: "system", text: localPreviewEnabled ? "预览模式：终局小纸条已同步。" : "终局小纸条已发送给对方。" }, true);
       const reply = plainText(next.reply_text || next.wakeup?.reply_text || next.reply_preview || next.wakeup?.reply_preview || "").trim();
       if (reply) appendChat({ id: makeChatId("ai"), speaker: "ai", text: reply }, true);
       setFinalNoteOpen(false);
@@ -1265,28 +1240,6 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   };
   const canProcessAssistantPause = isAssistantTurn && pausedByActor.ai && !pendingEvent;
   const rollDisabled = busy || animating || chatSending || !payload?.state || Boolean(pendingEvent) || (isAssistantTurn && !canProcessAssistantPause);
-  const canLocalProcessAssistantPending = Boolean(
-        pendingEvent
-      && (
-	        (pendingEvent.type === "choice" && pendingEvent.actor === "ai")
-	        || (pendingEvent.type === "duel" && pendingEvent.current_actor === "ai")
-	        || (pendingEvent.type === "review" && pendingEvent.actor === "ai" && pendingEvent.phase === "assigned")
-	        || (pendingEvent.type === "review" && pendingEvent.reviewer === "ai" && pendingEvent.phase === "questioning")
-	        || (pendingEvent.type === "review" && pendingEvent.reviewer === "ai" && pendingEvent.phase === "submitted")
-	      )
-	  );
-  const canLocalAssistantReply = Boolean(payload?.state && (isAssistantTurn || canLocalProcessAssistantPending));
-  const localAssistantPendingLabel = pendingEvent?.type === "choice"
-    ? "本地模拟对方选择"
-    : pendingEvent?.type === "duel" && pendingEvent.current_actor === "ai"
-      ? "本地模拟对方出拳"
-    : pendingEvent?.type === "review" && pendingEvent.reviewer === "ai" && pendingEvent.phase === "questioning"
-      ? "本地模拟对方出题"
-      : pendingEvent?.type === "review" && pendingEvent.actor === "ai" && pendingEvent.phase === "assigned"
-      ? "本地模拟对方提交"
-      : pendingEvent?.type === "review" && pendingEvent.reviewer === "ai" && pendingEvent.phase === "submitted"
-        ? "本地模拟对方验收"
-        : "本地处理对方待办";
   const chatDisabled = chatSending || busy || animating || !payload?.state;
 
   return (
@@ -1381,19 +1334,6 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             重开
           </button>
         </div>
-
-        {localPreviewEnabled ? (
-          <div className="sese-preview-tools">
-            <button
-              type="button"
-              disabled={busy || animating || chatSending || !canLocalAssistantReply}
-              onClick={() => void processLocalAssistantPending()}
-            >
-              本地模拟对方回应
-            </button>
-            <span>{pendingEvent ? "模拟对方会按自然语言指令回应" : isAssistantTurn ? "模拟对方会先发【掷骰】" : "轮到对方时可用"}</span>
-          </div>
-        ) : null}
 
         <div className="sese-history">
           {lines.length ? `最近：${lines[0]}` : "最近：等待第一次掷骰"}
@@ -1493,10 +1433,6 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
               onReject={rejectPending}
               onChoose={choosePending}
               onPass={passPending}
-              localPreviewEnabled={localPreviewEnabled}
-              canLocalProcess={canLocalProcessAssistantPending}
-              localProcessLabel={localAssistantPendingLabel}
-              onLocalProcess={processLocalAssistantPending}
             />
           </div>
         </div>
@@ -2474,23 +2410,6 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           background: var(--soft-lavender);
           padding: 6px 8px;
         }
-        .sese-local-pending-button {
-          display: block;
-          width: 100%;
-          min-height: 34px;
-          margin-top: 8px;
-          border: 0;
-          border-radius: 14px;
-          background: var(--primary-pink);
-          color: #fff;
-          font-size: 11px;
-          font-weight: 900;
-          box-shadow: 0 3px 0 #d81b60;
-        }
-        .sese-local-pending-button:disabled {
-          opacity: 0.55;
-          box-shadow: none;
-        }
         .sese-submission-text {
           min-height: 44px;
           white-space: pre-wrap;
@@ -2622,34 +2541,6 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         }
         .sese-restart-button:disabled {
           opacity: 0.5;
-        }
-        .sese-preview-tools {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          min-height: 30px;
-          color: rgba(136, 77, 138, 0.66);
-          font-size: 10px;
-          font-weight: 800;
-        }
-        .sese-preview-tools button {
-          height: 30px;
-          border: 0;
-          border-radius: 15px;
-          background: #ffffff;
-          color: var(--text-main);
-          padding: 0 12px;
-          font-size: 11px;
-          font-weight: 900;
-          box-shadow: 0 3px 0 rgba(136, 77, 138, 0.16);
-        }
-        .sese-preview-tools button:active {
-          transform: translateY(1px);
-        }
-        .sese-preview-tools button:disabled {
-          opacity: 0.45;
         }
         .sese-theme-mask {
           position: fixed;
@@ -3709,10 +3600,6 @@ function PendingEventPanel({
   onReject,
   onChoose,
   onPass,
-  localPreviewEnabled,
-  canLocalProcess,
-  localProcessLabel,
-  onLocalProcess,
 }: {
   pending: PendingEvent;
   passCount: number;
@@ -3725,10 +3612,6 @@ function PendingEventPanel({
   onReject: () => void;
   onChoose: (choiceId: string) => void;
   onPass: () => void;
-  localPreviewEnabled?: boolean;
-  canLocalProcess?: boolean;
-  localProcessLabel?: string;
-  onLocalProcess?: () => void;
 }) {
   const name = displaySystemText(pending.name || "惩罚任务");
   const actor = pending.actor || "player";
@@ -3746,12 +3629,6 @@ function PendingEventPanel({
     setSelectedRps("");
   }, [pending.id, pending.current_actor, pending.phase]);
   const activeRpsPick = normalizeRpsChoice(selectedRps || pending.picks?.player);
-  const localProcessButton = localPreviewEnabled && canLocalProcess && onLocalProcess ? (
-    <button className="sese-local-pending-button" type="button" disabled={disabled} onClick={onLocalProcess}>
-      {localProcessLabel || "本地模拟对方处理"}
-    </button>
-  ) : null;
-
   if (pending.type === "choice") {
     return (
       <div className="sese-pending-card">
@@ -3774,7 +3651,6 @@ function PendingEventPanel({
         ) : (
           <div className="sese-pending-wait">
             等待对方选择惩罚。
-            {localProcessButton}
           </div>
         )}
         {canPass ? <button className="sese-pass-button" type="button" disabled={disabled} onClick={onPass}>使用Pass卡跳过</button> : null}
@@ -3829,7 +3705,6 @@ function PendingEventPanel({
         ) : (
           <div className="sese-pending-wait">
             等待对方验收你的提交。
-            {localProcessButton}
           </div>
         )}
       </div>
@@ -3861,7 +3736,6 @@ function PendingEventPanel({
         ) : (
           <div className="sese-pending-wait">
             {waitingTask === "对方正在出题中。" ? "等待对方给出真心话题目。" : waitingTask}
-            {localProcessButton}
           </div>
         )}
       </div>
@@ -3895,7 +3769,6 @@ function PendingEventPanel({
       ) : (
         <div className="sese-pending-wait">
           <span>{waitingText}</span>
-          {localProcessButton}
         </div>
       )}
     </div>

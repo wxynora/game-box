@@ -17,23 +17,23 @@ async function executeCommand(command: string): Promise<SeseBoardPayload> {
 function fakeAssistant(payload: SeseBoardPayload, context: AssistantContext): string {
   const pending = payload.state?.pending_event;
   if (context.mode === "final_note") return "收到了，准备按终局小纸条继续。";
-  if (context.mode === "chat") return "收到，这里是开源预览里的模拟对方回复。";
+  if (context.mode === "chat") return "收到，这里是开源预览里的对方回复。";
   if (pending?.type === "duel") {
     const pick = RPS[Math.floor(Math.random() * RPS.length)];
-    return `【剪刀石头布：${pick}】\n本地预览模拟出拳。`;
+    return `【剪刀石头布：${pick}】\n预览对方出拳。`;
   }
   if (pending?.type === "choice") {
     const choice = pending.choices?.[0]?.id || pending.choices?.[0]?.label || "";
-    return `【选择：${choice}】\n本地预览模拟选择。`;
+    return `【选择：${choice}】\n预览对方选择。`;
   }
   if (pending?.type === "review") {
     if (pending.phase === "questioning") {
       return "【提交】\n你现在最想知道对方哪件没说出口的事？";
     }
-    if (pending.phase === "submitted") return "【通过】\n本地预览模拟通过。";
+    if (pending.phase === "submitted") return "【通过】\n预览对方通过。";
     return "【提交】\n我按当前主题完成了任务，提交给对方验收。";
   }
-  if (payload.state?.turn_actor === "ai") return "【掷骰】\n本地预览模拟掷骰。";
+  if (payload.state?.turn_actor === "ai") return "【掷骰】\n预览对方掷骰。";
   return "现在轮到你操作。";
 }
 
