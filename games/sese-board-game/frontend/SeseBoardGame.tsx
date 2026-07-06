@@ -545,12 +545,25 @@ type AssistantDirective =
   | { kind: "pass"; body: string }
   | { kind: ""; body: string };
 
+function directiveBody(lines: string[], startIndex: number): string {
+  return lines
+    .slice(startIndex)
+    .map((line) => {
+      const trimmed = line.trim();
+      const description = trimmed.match(/^【描述[:：](.*)】$/);
+      return description ? description[1].trim() : trimmed;
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
 function parseAssistantDirective(text: string): AssistantDirective {
   const lines = String(text || "").split(/\r?\n/);
   const firstIndex = lines.findIndex((line) => line.trim());
   if (firstIndex < 0) return { kind: "", body: "" };
   const first = lines[firstIndex].trim();
-  const body = lines.slice(firstIndex + 1).join("\n").trim();
+  const body = directiveBody(lines, firstIndex + 1);
   if (first === "【掷骰】") return { kind: "roll", body };
   if (first === "【提交】") return { kind: "submit", body };
   if (first === "【通过】") return { kind: "approve", body };
@@ -560,7 +573,7 @@ function parseAssistantDirective(text: string): AssistantDirective {
   if (choiceMatch) return { kind: "choose", choice: choiceMatch[1].trim(), body };
   const duelMatch = first.match(/^【(?:剪刀石头布|石头剪刀布)[:：](.+)】$/);
   if (duelMatch) return { kind: "choose", choice: duelMatch[1].trim(), body };
-  return { kind: "", body: String(text || "").trim() };
+  return { kind: "", body: directiveBody(lines, firstIndex) };
 }
 
 
@@ -592,23 +605,23 @@ function localAssistantReplyForState(mode: SeseBoardSyncMode, state: SeseBoardSt
   }
   const pending = state?.pending_event || null;
   if (pending?.type === "duel" && pending.current_actor === "ai") {
-    return "【剪刀石头布：石头】\n本地预览：我出石头。";
+    return "【剪刀石头布：石头】\n【描述：本地预览：我出石头。】";
   }
   if (pending?.type === "choice" && pending.actor === "ai") {
     const choice = firstPendingChoice(pending, "");
-    if (choice) return `【选择：${choice}】\n本地预览：我选这个。`;
+    if (choice) return `【选择：${choice}】\n【描述：本地预览：我选这个。】`;
   }
   if (pending?.type === "review" && pending.reviewer === "ai" && pending.phase === "questioning") {
-    return "【提交】\n本地预览：对方想问你的真心话问题。";
+    return "【提交】\n【描述：本地预览：对方想问你的真心话问题。】";
   }
   if (pending?.type === "review" && pending.actor === "ai" && pending.phase === "assigned") {
-    return "【提交】\n本地预览：对方已经完成任务，提交给你验收。";
+    return "【提交】\n【描述：本地预览：对方已经完成任务，提交给你验收。】";
   }
   if (pending?.type === "review" && pending.reviewer === "ai" && pending.phase === "submitted") {
-    return "【通过】\n本地预览：这次算你通过。";
+    return "【通过】\n【描述：本地预览：这次算你通过。】";
   }
   if (isAssistantTurnState(state)) {
-    return "【掷骰】\n本地预览：我来掷这一回合。";
+    return "【掷骰】\n【描述：本地预览：我来掷这一回合。】";
   }
   return "本地预览：我看到了，等你继续行动。";
 }
@@ -1127,7 +1140,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     command: string,
     options: { success?: string; notify?: boolean; notifyMessage?: string } = {},
   ) => {
-    if (busy || animating || chatSending || !payload?.state) return;
+    if (busy || !payload?.state) return;
     let nextPayload: SeseBoardPayload | null = null;
     setBusy(true);
     setPopup(null);
@@ -1151,7 +1164,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     if (nextPayload && options.notify) {
       await notifyRollResultToAssistant(nextPayload, options.notifyMessage || "你处理了涩涩走格棋的惩罚任务。");
     }
-  }, [animating, appendChat, applyPayload, busy, chatSending, notifyRollResultToAssistant, payload?.state, toast]);
+  }, [appendChat, applyPayload, busy, notifyRollResultToAssistant, payload?.state, toast]);
 
   const submitPending = useCallback(() => {
     const text = pendingSubmission.trim();
@@ -1193,7 +1206,9 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     void executePendingCommand(`choose ${choiceId}`, {
       success: isDuel ? "已出拳，等待对方出拳。" : "已选择惩罚，棋局继续。",
       notify: true,
-      notifyMessage: isDuel ? "你已在剪刀石头布对抗中出拳，请你发送【剪刀石头布：石头/剪刀/布】。" : "你处理完选择惩罚，棋局继续。",
+      notifyMessage: isDuel
+        ? "你已在剪刀石头布对抗中出拳。请第一行单独发送【剪刀石头布：石头】、【剪刀石头布：剪刀】或【剪刀石头布：布】；描述另起一行写成【描述：...】。"
+        : "你处理完选择惩罚，棋局继续。",
     });
   }, [executePendingCommand, pendingEvent?.actor, pendingEvent?.current_actor, pendingEvent?.type, toast]);
 
