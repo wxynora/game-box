@@ -141,7 +141,7 @@ type SeseBoardSyncPayload = {
   error?: string;
 };
 
-type SeseBoardSyncMode = "roll_result" | "chat" | "final_note";
+type SeseBoardSyncMode = "roll_result" | "state_update" | "chat" | "final_note";
 type FinalAppendSlot = "prop";
 
 type MoveInfo = {
@@ -179,6 +179,51 @@ type GameChatMessage = {
   speaker: Actor | "system";
   text: string;
 };
+
+const GAME_CHAT_STORAGE_KEY = "sese-board-game:chat:v1";
+const GAME_CHAT_SPEAKERS = new Set<string>(["player", "ai", "system"]);
+const DEFAULT_GAME_CHAT_MESSAGES: GameChatMessage[] = [
+  {
+    id: "system-ready",
+    speaker: "system",
+    text: "游戏内交流在这里。对方明确发送【掷骰】时，棋盘才会执行他的行动。",
+  },
+];
+
+function defaultGameChatMessages(): GameChatMessage[] {
+  return DEFAULT_GAME_CHAT_MESSAGES.map((message) => ({ ...message }));
+}
+
+function readStoredGameChatMessages(): GameChatMessage[] {
+  if (typeof window === "undefined") return defaultGameChatMessages();
+  try {
+    const raw = window.localStorage.getItem(GAME_CHAT_STORAGE_KEY);
+    if (!raw) return defaultGameChatMessages();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return defaultGameChatMessages();
+    const messages = parsed.flatMap((entry, index): GameChatMessage[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const item = entry as Partial<Record<keyof GameChatMessage, unknown>>;
+      const speaker = typeof item.speaker === "string" ? item.speaker : "";
+      const text = typeof item.text === "string" ? item.text.trim() : "";
+      if (!GAME_CHAT_SPEAKERS.has(speaker) || !text) return [];
+      const rawId = typeof item.id === "string" ? item.id.trim() : "";
+      return [{ id: rawId || `stored-${index}`, speaker: speaker as GameChatMessage["speaker"], text }];
+    });
+    return messages.length ? messages : defaultGameChatMessages();
+  } catch {
+    return defaultGameChatMessages();
+  }
+}
+
+function writeStoredGameChatMessages(messages: GameChatMessage[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(GAME_CHAT_STORAGE_KEY, JSON.stringify(messages));
+  } catch {
+    // Ignore private-mode or quota failures; chat still works for the current view.
+  }
+}
 
 const ACTORS: Actor[] = ["player", "ai"];
 const ACTOR_LABEL: Record<Actor, string> = { player: "你", ai: "对方" };
@@ -630,6 +675,33 @@ function isAssistantTurnState(state: SeseBoardState | undefined): boolean {
   return Boolean(state && state.turn_actor === "ai" && !state.game_over);
 }
 
+function isAssistantPendingState(state: SeseBoardState | undefined): boolean {
+  const pending = state?.pending_event || null;
+  if (!state || state.game_over || !pending) return false;
+  if (pending.type === "duel") return pending.current_actor === "ai";
+  if (pending.type === "choice") return pending.actor === "ai";
+  if (pending.type === "review") {
+    const phase = String(pending.phase || "");
+    if (phase === "questioning" || phase === "submitted") return pending.reviewer === "ai";
+    return pending.actor === "ai";
+  }
+  return false;
+}
+
+function assistantFollowupMessage(state: SeseBoardState | undefined): string {
+  const pending = state?.pending_event || null;
+  if (!pending) return "现在轮到对方行动。";
+  if (pending.type === "duel") return "现在轮到对方完成剪刀石头布对抗。";
+  if (pending.type === "choice") return "对方刚触发了需要自己选择的惩罚。";
+  if (pending.type === "review") {
+    const phase = String(pending.phase || "");
+    if (phase === "questioning") return "现在需要对方给出真心话题目。";
+    if (phase === "submitted") return "现在需要对方验收你提交的惩罚任务。";
+    return "现在需要对方提交惩罚任务。";
+  }
+  return "现在轮到对方处理棋局。";
+}
+
 export type AssistantContext = {
   mode: SeseBoardSyncMode;
   message?: string;
@@ -697,13 +769,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const [toyConsoleOpen, setToyConsoleOpen] = useState(false);
   const [toyConsoleLevel, setToyConsoleLevel] = useState(1);
   const [pendingSubmission, setPendingSubmission] = useState("");
-  const [chatMessages, setChatMessages] = useState<GameChatMessage[]>([
-    {
-      id: "system-ready",
-      speaker: "system",
-      text: "游戏内交流在这里。对方明确发送【掷骰】时，棋盘才会执行他的行动。",
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<GameChatMessage[]>(readStoredGameChatMessages);
 
   const state = payload?.state || {};
   const boardSize = Math.max(12, Math.min(80, Number(state.board_size || 36)));
@@ -733,6 +799,10 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     if (!chatOpen) return;
     window.setTimeout(() => chatEndRef.current?.scrollIntoView({ block: "end" }), 40);
   }, [chatMessages.length, chatOpen, chatSending]);
+
+  useEffect(() => {
+    writeStoredGameChatMessages(chatMessages);
+  }, [chatMessages]);
 
   useEffect(() => {
     if (!popup || popup.kind !== "draw" || popup.tone !== "reward") {
@@ -840,6 +910,8 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       const next = await executeSeseBoard("new_game");
       setDice(1);
       applyPayload(next);
+      setChatMessages(defaultGameChatMessages());
+      setChatUnread(0);
       setThemeDraw(buildThemeDraw(next.state?.theme_profile?.theme, next.state?.theme_profile?.direction_label, next.state?.theme_options));
     } catch (e: any) {
       toast(`开新局失败：${e?.message || e}`);
@@ -917,6 +989,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         const next = await executeSeseBoard(`submit ${submission}`);
         applyPayload(next);
         appendChat({ id: makeChatId("system"), speaker: "system", text: "对方已提交惩罚任务，等你验收。" }, true);
+        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
         return;
       }
       if (pending?.actor === "ai" && pending.type === "choice") {
@@ -928,12 +1001,14 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             return;
           }
           appendChat({ id: makeChatId("system"), speaker: "system", text: "对方使用Pass卡跳过了惩罚。" }, true);
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
           return;
         }
         if (directive.kind !== "choose" || !directive.choice.trim()) return;
         const next = await executeSeseBoard(`choose ${directive.choice.trim()}`);
         applyPayload(next);
         appendChat({ id: makeChatId("system"), speaker: "system", text: "对方已选择惩罚选项。" }, true);
+        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
         return;
       }
       if (pending?.reviewer === "ai" && pending.type === "review" && pending.phase === "submitted") {
@@ -941,6 +1016,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           const next = await executeSeseBoard("approve");
           applyPayload(next);
           appendChat({ id: makeChatId("system"), speaker: "system", text: "对方验收通过，棋局继续。" }, true);
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
           return;
         }
         if (directive.kind === "reject") {
@@ -1004,16 +1080,19 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     stateForReply: SeseBoardState | undefined,
     message = "现在轮到对方行动。",
   ) => {
-    if (!isAssistantTurnState(stateForReply) || stateForReply?.pending_event) return;
+    const assistantPending = isAssistantPendingState(stateForReply);
+    if (!isAssistantTurnState(stateForReply) || (stateForReply?.pending_event && !assistantPending)) return;
     appendChat({
       id: makeChatId("system"),
       speaker: "system",
-      text: localPreviewEnabled ? "预览模式：轮到对方行动，已继续同步。" : "轮到对方行动，已同步给对方。",
+      text: assistantPending
+        ? (localPreviewEnabled ? "预览模式：轮到对方处理任务，已继续同步。" : "轮到对方处理任务，已同步给对方。")
+        : (localPreviewEnabled ? "预览模式：轮到对方行动，已继续同步。" : "轮到对方行动，已同步给对方。"),
     }, true);
     setChatSending(true);
     try {
       const next = await syncSeseBoardWithAssistant({
-        mode: "roll_result",
+        mode: "state_update",
         message,
         rollText: "",
       }, stateForReply);
@@ -1087,6 +1166,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const rollOnce = useCallback(async (options: { notifyAfterUserRoll?: boolean } = {}) => {
     if (busy || animating || isGameOver) return;
     let notifyPayload: SeseBoardPayload | null = null;
+    let continuePayload: SeseBoardPayload | null = null;
     setBusy(true);
     setAnimating(true);
     setPopup(null);
@@ -1117,8 +1197,16 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       applyPayload(next);
       const nextPopup = parseEventPopup(next.player_text || "", move);
       if (nextPopup) setPopup(nextPopup);
-      if (options.notifyAfterUserRoll !== false && actorBeforeRoll === "player" && !next.state?.game_over) {
+      const pendingAfterRoll = next.state?.pending_event || null;
+      if (
+        options.notifyAfterUserRoll !== false
+        && actorBeforeRoll === "player"
+        && !next.state?.game_over
+        && (!pendingAfterRoll || isAssistantPendingState(next.state))
+      ) {
         notifyPayload = next;
+      } else if (options.notifyAfterUserRoll === false && actorBeforeRoll === "ai" && isAssistantTurnState(next.state)) {
+        continuePayload = next;
       }
     } catch (e: any) {
       toast(`掷骰失败：${e?.message || e}`);
@@ -1129,6 +1217,8 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     }
     if (notifyPayload) {
       await notifyRollResultToAssistant(notifyPayload);
+    } else if (continuePayload) {
+      await continueAssistantTurnRef.current?.(continuePayload.state, assistantFollowupMessage(continuePayload.state));
     }
   }, [animateActor, animateDice, animating, applyPayload, busy, isGameOver, notifyRollResultToAssistant, state.positions, state.turn_actor, toast]);
 
