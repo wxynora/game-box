@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 import os
 from pathlib import Path
 from typing import Any
@@ -49,4 +47,4 @@ def execute_tool(arguments: dict[str, Any] | None = None) -> str:
     command = str(args.get("command") or "status")
     save_path = args.get("save_path") or default_save_path()
     payload = run_command(command, save_path=save_path)
-    return json.dumps(payload, ensure_ascii=False)
+    return str(payload.get("ai_text") or payload.get("text") or "").strip()
