@@ -132,6 +132,8 @@ type SeseBoardSyncPayload = {
   state?: SeseBoardState;
   reply_text?: string;
   reply_preview?: string;
+  applied_reply_commands?: Array<{ command?: string; ok?: boolean; error?: string }>;
+  followup_wakeups?: Array<{ ok?: boolean; reply_preview?: string; error?: string }>;
   channel?: string;
   wakeup?: {
     error?: string;
@@ -143,6 +145,7 @@ type SeseBoardSyncPayload = {
 };
 
 type SeseBoardSyncMode = "roll_result" | "state_update" | "chat" | "final_note";
+type AssistantResponse = string | SeseBoardSyncPayload;
 type FinalAppendSlot = "prop";
 
 type MoveInfo = {
@@ -734,6 +737,17 @@ function isAssistantPendingState(state: SeseBoardState | undefined): boolean {
   return false;
 }
 
+function hasAppliedAssistantCommands(payload: SeseBoardSyncPayload | undefined): boolean {
+  return Array.isArray(payload?.applied_reply_commands) && payload.applied_reply_commands.length > 0;
+}
+
+function shouldContinueAfterAppliedAssistantCommands(payload: SeseBoardSyncPayload | undefined): boolean {
+  if (!hasAppliedAssistantCommands(payload)) return false;
+  if (Array.isArray(payload?.followup_wakeups) && payload.followup_wakeups.length > 0) return false;
+  const nextState = payload?.state;
+  return isAssistantTurnState(nextState) && (!nextState?.pending_event || isAssistantPendingState(nextState));
+}
+
 function assistantFollowupMessage(state: SeseBoardState | undefined): string {
   const pending = state?.pending_event || null;
   if (!pending) return "现在轮到对方行动。";
@@ -768,7 +782,7 @@ export type SeseBoardLabels = {
 
 export type SeseBoardGameProps = {
   executeCommand: (command: string) => Promise<SeseBoardPayload> | SeseBoardPayload;
-  sendToAssistant?: (payload: SeseBoardPayload, context: AssistantContext) => Promise<string> | string;
+  sendToAssistant?: (payload: SeseBoardPayload, context: AssistantContext) => Promise<AssistantResponse> | AssistantResponse;
   labels?: SeseBoardLabels;
   onBack?: () => void;
   className?: string;
@@ -1143,11 +1157,30 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     };
     let reply = "";
     if (sendToAssistant) {
-      reply = plainText(await sendToAssistant(basePayload, {
+      const assistantResult = await sendToAssistant(basePayload, {
         mode: options.mode,
         message: options.message,
         rollText: options.rollText,
-      })).trim();
+      });
+      if (assistantResult && typeof assistantResult === "object") {
+        const syncPayload = assistantResult as SeseBoardSyncPayload;
+        const syncedReply = plainText(
+          syncPayload.reply_text
+            || syncPayload.wakeup?.reply_text
+            || syncPayload.reply_preview
+            || syncPayload.wakeup?.reply_preview
+            || "",
+        ).trim();
+        return {
+          ...syncPayload,
+          ok: syncPayload.ok !== false,
+          state: syncPayload.state || nextState,
+          player_text: syncPayload.player_text || playerText,
+          reply_text: syncedReply,
+          reply_preview: syncPayload.reply_preview || syncPayload.wakeup?.reply_preview || syncedReply.slice(0, 120),
+        };
+      }
+      reply = plainText(assistantResult).trim();
     } else if (localPreviewEnabled) {
       reply = localAssistantReplyForState(options.mode, nextState);
     }
@@ -1187,6 +1220,12 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         });
       }
       const reply = plainText(next.reply_text || next.wakeup?.reply_text || next.reply_preview || next.wakeup?.reply_preview || "").trim();
+      if (hasAppliedAssistantCommands(next)) {
+        if (shouldContinueAfterAppliedAssistantCommands(next)) {
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.player_text || "");
+        }
+        return;
+      }
       await processAssistantReply(reply, next.state || stateForReply);
     } catch (e: any) {
       const error = String(e?.message || e || "同步失败");
@@ -1233,6 +1272,12 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         });
       }
       const reply = plainText(next.reply_text || next.wakeup?.reply_text || next.reply_preview || next.wakeup?.reply_preview || "").trim();
+      if (hasAppliedAssistantCommands(next)) {
+        if (shouldContinueAfterAppliedAssistantCommands(next)) {
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.player_text || rolled.player_text || "");
+        }
+        return;
+      }
       await processAssistantReply(reply, next.state || rolled.state);
     } catch (e: any) {
       const message = String(e?.message || e || "同步失败");

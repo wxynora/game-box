@@ -19,7 +19,7 @@ export function GamePage() {
 ```ts
 type SeseBoardGameProps = {
   executeCommand: (command: string) => Promise<SeseBoardPayload> | SeseBoardPayload;
-  sendToAssistant?: (payload: SeseBoardPayload, context: AssistantContext) => Promise<string> | string;
+  sendToAssistant?: (payload: SeseBoardPayload, context: AssistantContext) => Promise<string | SeseBoardSyncPayload> | string | SeseBoardSyncPayload;
   labels?: { title?: string };
   onBack?: () => void;
   className?: string;
@@ -35,6 +35,7 @@ type SeseBoardGameProps = {
 
 - `sendToAssistant`: 把 `payload.ai_text` 交给 AI 玩家，并返回 AI 回复。
   - `state_update` / 打回重写这类同步说明会拼进 `payload.ai_text` 的“本次说明”，宿主只发 `payload.ai_text` 即可，不要只发 `state`。
+  - 宿主也可以返回已应用 AI 指令后的同步 payload（含 `state`、`reply_text`、`applied_reply_commands`、`followup_wakeups`）；组件会以宿主返回的 `state` 为准，避免重复解析同一条 AI 回复。
 - `labels.title`: 自定义标题。
 - `onBack`: 返回按钮。
 - `autoRunAssistant`: 是否在预览/宿主里自动模拟 AI 操作。生产接入建议谨慎使用。
