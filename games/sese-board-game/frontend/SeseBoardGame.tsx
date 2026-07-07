@@ -745,6 +745,14 @@ function assistantFollowupMessage(state: SeseBoardState | undefined): string {
   return "现在轮到对方处理棋局。";
 }
 
+function assistantPayloadText(source: string, message = ""): string {
+  const body = plainText(source || "").trim();
+  const note = plainText(message || "").trim();
+  if (!note) return body;
+  if (!body || body === note) return `本次说明：\n${note}`;
+  return `本次说明：\n${note}\n\n当前棋局：\n${body}`;
+}
+
 export type AssistantContext = {
   mode: SeseBoardSyncMode;
   message?: string;
@@ -791,8 +799,8 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const chatOpenRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const rollOnceRef = useRef<((options?: { notifyAfterUserRoll?: boolean }) => Promise<void>) | null>(null);
-  const continueAssistantTurnRef = useRef<((state: SeseBoardState | undefined, message?: string) => Promise<void>) | null>(null);
-  const continueAfterPopupRef = useRef<{ state: SeseBoardState | undefined; message: string } | null>(null);
+  const continueAssistantTurnRef = useRef<((state: SeseBoardState | undefined, message?: string, sourceText?: string) => Promise<void>) | null>(null);
+  const continueAfterPopupRef = useRef<{ state: SeseBoardState | undefined; message: string; sourceText?: string } | null>(null);
   const pendingRollSyncNoteRef = useRef("");
   const [payload, setPayload] = useState<SeseBoardPayload | null>(null);
   const [displayPositions, setDisplayPositions] = useState<Partial<Record<Actor, number>>>(DEFAULT_POSITIONS);
@@ -1000,7 +1008,11 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         const shouldContinueAssistantTurn = isAssistantTurnState(next.state) && !next.state?.pending_event;
         if (resultText) {
           continueAfterPopupRef.current = shouldContinueAssistantTurn
-            ? { state: next.state, message: "剪刀石头布对抗已结算，现在轮到对方行动。" }
+            ? {
+                state: next.state,
+                message: "剪刀石头布对抗已结算，现在轮到对方行动。",
+                sourceText: next.ai_text || next.text || next.player_text || "",
+              }
             : null;
           setPopup({
             position: Number(pending.cell || next.state?.positions?.ai || 0),
@@ -1013,7 +1025,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         }
         appendChat({ id: makeChatId("system"), speaker: "system", text: resultText || payloadFailureText(next, "对方已出拳，系统已判定对抗结果。") }, true);
         if (!resultText && shouldContinueAssistantTurn) {
-          await continueAssistantTurnRef.current?.(next.state, "剪刀石头布对抗已结算，现在轮到对方行动。");
+          await continueAssistantTurnRef.current?.(next.state, "剪刀石头布对抗已结算，现在轮到对方行动。", next.ai_text || next.text || next.player_text || "");
         }
         return;
       }
@@ -1039,7 +1051,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         const next = await executeSeseBoard(`submit ${submission}`);
         applyPayload(next);
         appendChat({ id: makeChatId("system"), speaker: "system", text: "对方已提交惩罚任务，等你验收。" }, true);
-        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
+        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.ai_text || next.text || next.player_text || "");
         return;
       }
       if (pending?.actor === "ai" && pending.type === "choice") {
@@ -1051,14 +1063,14 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             return;
           }
           appendChat({ id: makeChatId("system"), speaker: "system", text: "对方使用Pass卡跳过了惩罚。" }, true);
-          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.ai_text || next.text || next.player_text || "");
           return;
         }
         if (directive.kind !== "choose" || !directive.choice.trim()) return;
         const next = await executeSeseBoard(`choose ${directive.choice.trim()}`);
         applyPayload(next);
         appendChat({ id: makeChatId("system"), speaker: "system", text: "对方已选择惩罚选项。" }, true);
-        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
+        await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.ai_text || next.text || next.player_text || "");
         return;
       }
       if (pending?.reviewer === "ai" && pending.type === "review" && pending.phase === "submitted") {
@@ -1078,7 +1090,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             await rollOnceRef.current?.({ notifyAfterUserRoll: false });
             return;
           }
-          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state));
+          await continueAssistantTurnRef.current?.(next.state, assistantFollowupMessage(next.state), next.ai_text || next.text || next.player_text || "");
           return;
         }
         if (directive.kind === "reject") {
@@ -1106,20 +1118,25 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   }, [appendChat, applyPayload]);
 
   const syncSeseBoardWithAssistant = useCallback(async (
-    options: { mode: SeseBoardSyncMode; message?: string; rollText?: string },
+    options: { mode: SeseBoardSyncMode; message?: string; rollText?: string; sourceText?: string },
     stateForReply: SeseBoardState | undefined,
   ): Promise<SeseBoardSyncPayload> => {
     let nextState = stateForReply;
     let playerText = "";
+    let assistantText = options.sourceText || options.rollText || "";
     if (options.mode === "final_note") {
       const marked = await executeSeseBoard("final_note_sent");
       nextState = marked.state || nextState;
       playerText = marked.player_text || marked.text || "";
+      assistantText = marked.ai_text || marked.text || marked.player_text || assistantText;
     }
+    const aiText = assistantPayloadText(assistantText || options.message || "", options.message);
     const basePayload: SeseBoardPayload = {
       ok: true,
+      text: aiText,
+      ai_text: aiText,
       state: nextState,
-      player_text: playerText || options.rollText || options.message || "",
+      player_text: playerText || aiText,
     };
     let reply = "";
     if (sendToAssistant) {
@@ -1147,6 +1164,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const continueAssistantTurn = useCallback(async (
     stateForReply: SeseBoardState | undefined,
     message = "现在轮到对方行动。",
+    sourceText = "",
   ) => {
     const assistantPending = isAssistantPendingState(stateForReply);
     if (!isAssistantTurnState(stateForReply) || (stateForReply?.pending_event && !assistantPending)) return;
@@ -1156,6 +1174,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
         mode: "state_update",
         message,
         rollText: "",
+        sourceText,
       }, stateForReply);
       if (next.state) {
         applyPayload({
@@ -1184,7 +1203,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     continueAfterPopupRef.current = null;
     setPopup(null);
     if (next) {
-      void continueAssistantTurnRef.current?.(next.state, next.message);
+      void continueAssistantTurnRef.current?.(next.state, next.message, next.sourceText);
     }
   }, []);
 
@@ -1276,7 +1295,11 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
     if (notifyPayload) {
       await notifyRollResultToAssistant(notifyPayload);
     } else if (continuePayload) {
-      await continueAssistantTurnRef.current?.(continuePayload.state, assistantFollowupMessage(continuePayload.state));
+      await continueAssistantTurnRef.current?.(
+        continuePayload.state,
+        assistantFollowupMessage(continuePayload.state),
+        continuePayload.ai_text || continuePayload.text || continuePayload.player_text || "",
+      );
     }
   }, [animateActor, animateDice, animating, applyPayload, busy, isGameOver, notifyRollResultToAssistant, state.positions, state.turn_actor, toast]);
 
@@ -1313,7 +1336,11 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       setBusy(false);
     }
     if (nextPayload && options.syncAfter) {
-      await continueAssistantTurnRef.current?.(nextPayload.state, options.syncMessage || assistantFollowupMessage(nextPayload.state));
+      await continueAssistantTurnRef.current?.(
+        nextPayload.state,
+        options.syncMessage || assistantFollowupMessage(nextPayload.state),
+        nextPayload.ai_text || nextPayload.text || nextPayload.player_text || "",
+      );
     }
   }, [appendChat, applyPayload, busy, payload?.state, toast]);
 

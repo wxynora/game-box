@@ -34,6 +34,7 @@ type SeseBoardGameProps = {
 可选：
 
 - `sendToAssistant`: 把 `payload.ai_text` 交给 AI 玩家，并返回 AI 回复。
+  - `state_update` / 打回重写这类同步说明会拼进 `payload.ai_text` 的“本次说明”，宿主只发 `payload.ai_text` 即可，不要只发 `state`。
 - `labels.title`: 自定义标题。
 - `onBack`: 返回按钮。
 - `autoRunAssistant`: 是否在预览/宿主里自动模拟 AI 操作。生产接入建议谨慎使用。
