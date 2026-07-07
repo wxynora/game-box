@@ -622,7 +622,10 @@ function multilineColonDirectiveBody(lines: string[], firstIndex: number, patter
   const first = lines[firstIndex]?.trim() || "";
   const match = first.match(pattern);
   if (!match) return null;
-  const text = [match[1] || "", ...lines.slice(firstIndex + 1)]
+  const firstBody = match[1] || "";
+  const inlineClose = firstBody.indexOf("】");
+  if (inlineClose >= 0) return firstBody.slice(0, inlineClose).trim();
+  const text = [firstBody, ...lines.slice(firstIndex + 1)]
     .join("\n")
     .trim();
   return text.endsWith("】") ? text.slice(0, -1).trim() : text;
