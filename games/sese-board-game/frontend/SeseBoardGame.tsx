@@ -67,6 +67,7 @@ export type PendingEvent = {
   waiting_task?: string;
   pass_result?: string;
   reject_prompt?: string;
+  last_reject_reason?: string;
   pass_allowed?: boolean;
   cell?: number;
   theme?: string;
@@ -596,6 +597,13 @@ type AssistantDirective =
   | { kind: "pass"; body: string }
   | { kind: ""; body: string };
 
+type ReviewFeedback = {
+  outcome: "approved" | "rejected";
+  title: string;
+  text: string;
+  note: string;
+};
+
 function directiveBody(lines: string[], startIndex: number): string {
   return lines
     .slice(startIndex)
@@ -610,20 +618,34 @@ function directiveBody(lines: string[], startIndex: number): string {
     .trim();
 }
 
+function multilineColonDirectiveBody(lines: string[], firstIndex: number, pattern: RegExp): string | null {
+  const first = lines[firstIndex]?.trim() || "";
+  const match = first.match(pattern);
+  if (!match) return null;
+  const text = [match[1] || "", ...lines.slice(firstIndex + 1)]
+    .join("\n")
+    .trim();
+  return text.endsWith("】") ? text.slice(0, -1).trim() : text;
+}
+
 function parseAssistantDirective(text: string): AssistantDirective {
   const lines = String(text || "").split(/\r?\n/);
   const firstIndex = lines.findIndex((line) => line.trim());
   if (firstIndex < 0) return { kind: "", body: "" };
   const first = lines[firstIndex].trim();
   const body = directiveBody(lines, firstIndex + 1);
-  const descriptionOnlyMatch = first.match(/^【描述[:：](.*)】$/);
-  if (descriptionOnlyMatch) return { kind: "submit", body: descriptionOnlyMatch[1].trim() || body };
-  const truthQuestionMatch = first.match(/^【真心话出题[:：](.*)】$/);
-  if (truthQuestionMatch) return { kind: "submit", body: truthQuestionMatch[1].trim() || body };
-  const truthAnswerMatch = first.match(/^【真心话回答[:：](.*)】$/);
-  if (truthAnswerMatch) return { kind: "submit", body: truthAnswerMatch[1].trim() || body };
+  const descriptionText = multilineColonDirectiveBody(lines, firstIndex, /^【描述[:：](.*)$/);
+  if (descriptionText !== null) return { kind: "submit", body: descriptionText || body };
+  const truthQuestionText = multilineColonDirectiveBody(lines, firstIndex, /^【真心话出题[:：](.*)$/);
+  if (truthQuestionText !== null) return { kind: "submit", body: truthQuestionText || body };
+  const truthAnswerText = multilineColonDirectiveBody(lines, firstIndex, /^【真心话回答[:：](.*)$/);
+  if (truthAnswerText !== null) return { kind: "submit", body: truthAnswerText || body };
   if (first === "【掷骰】") return { kind: "roll", body };
   if (first === "【提交】") return { kind: "submit", body };
+  const approveMatch = first.match(/^【通过[:：](.*?)(?:】)?$/);
+  if (approveMatch) return { kind: "approve", body: approveMatch[1].trim() || body };
+  const rejectMatch = first.match(/^【(?:不通过|打回|驳回)[:：](.*?)(?:】)?$/);
+  if (rejectMatch) return { kind: "reject", body: rejectMatch[1].trim() || body };
   if (first === "【通过】") return { kind: "approve", body };
   if (first === "【不通过】" || first === "【打回】" || first === "【驳回】") return { kind: "reject", body };
   if (first === "【Pass】" || first === "【PASS】" || first === "【使用Pass卡】") return { kind: "pass", body };
@@ -641,7 +663,7 @@ export function parseAssistantTurn(text: string): AssistantTurnParse {
   const directive = parseAssistantDirective(text);
   if (directive.kind === "roll") return { command: "roll", chatText: directive.body };
   if (directive.kind === "submit") return { command: directive.body ? `submit ${directive.body}` : null, chatText: directive.body };
-  if (directive.kind === "approve") return { command: "approve", chatText: directive.body };
+  if (directive.kind === "approve") return { command: directive.body ? `approve ${directive.body}` : "approve", chatText: directive.body };
   if (directive.kind === "reject") return { command: directive.body ? `reject ${directive.body}` : "reject", chatText: directive.body };
   if (directive.kind === "choose") return { command: directive.choice ? `choose ${directive.choice}` : null, chatText: directive.body };
   if (directive.kind === "pass") return { command: "pass", chatText: directive.body };
@@ -684,7 +706,7 @@ function localAssistantReplyForState(mode: SeseBoardSyncMode, state: SeseBoardSt
     return "【提交】\n本地预览：对方已经完成任务，提交给你验收。";
   }
   if (pending?.type === "review" && pending.reviewer === "ai" && pending.phase === "submitted") {
-    return "【通过】";
+    return "【通过：本地预览：验收通过。】\n【掷骰】";
   }
   if (isAssistantTurnState(state)) {
     return "【掷骰】";
@@ -792,6 +814,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const [toyConsoleOpen, setToyConsoleOpen] = useState(false);
   const [toyConsoleLevel, setToyConsoleLevel] = useState(1);
   const [pendingSubmission, setPendingSubmission] = useState("");
+  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedback | null>(null);
   const [chatMessages, setChatMessages] = useState<GameChatMessage[]>(readStoredGameChatMessages);
 
   const state = payload?.state || {};
@@ -959,11 +982,15 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   const processAssistantReply = useCallback(async (reply: string, nextState: SeseBoardState | undefined) => {
     const assistantReply = reply.trim() || "我看到了。";
     const directive = parseAssistantDirective(assistantReply);
+    const pending = nextState?.pending_event || null;
     const assistantChatText = directive.body.trim();
-    if (assistantChatText) {
+    const isReviewDecision = pending?.reviewer === "ai"
+      && pending.type === "review"
+      && pending.phase === "submitted"
+      && (directive.kind === "approve" || directive.kind === "reject");
+    if (assistantChatText && !isReviewDecision) {
       appendChat({ id: makeChatId("ai"), speaker: "ai", text: assistantChatText }, true);
     }
-    const pending = nextState?.pending_event || null;
     try {
       if (pending?.type === "duel" && pending.current_actor === "ai") {
         if (directive.kind !== "choose" || !directive.choice.trim()) return;
@@ -1037,13 +1064,15 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
       if (pending?.reviewer === "ai" && pending.type === "review" && pending.phase === "submitted") {
         if (directive.kind === "approve") {
           const shouldRollAfterApprove = assistantIncludesRollDirective(assistantReply);
-          const next = await executeSeseBoard("approve");
+          const feedbackText = directive.body.trim() || "验收通过。";
+          const next = await executeSeseBoard(`approve ${feedbackText}`);
           applyPayload(next);
-          appendChat({
-            id: makeChatId("system"),
-            speaker: "system",
-            text: shouldRollAfterApprove ? "对方验收通过，并继续掷骰。" : "对方验收通过，棋局继续。",
-          }, true);
+          setReviewFeedback({
+            outcome: "approved",
+            title: "对方验收通过",
+            text: feedbackText,
+            note: shouldRollAfterApprove ? "已继续执行对方的掷骰。" : "棋局继续。",
+          });
           if (shouldRollAfterApprove && isAssistantTurnState(next.state)) {
             await wait(260);
             await rollOnceRef.current?.({ notifyAfterUserRoll: false });
@@ -1053,9 +1082,15 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           return;
         }
         if (directive.kind === "reject") {
-          const next = await executeSeseBoard(directive.body.trim() ? `reject ${directive.body.trim()}` : "reject");
+          const feedbackText = directive.body.trim() || "需要重新提交。";
+          const next = await executeSeseBoard(`reject ${feedbackText}`);
           applyPayload(next);
-          appendChat({ id: makeChatId("system"), speaker: "system", text: "对方打回了任务，需要重新提交。" }, true);
+          setReviewFeedback({
+            outcome: "rejected",
+            title: "对方打回了任务",
+            text: feedbackText,
+            note: "请按反馈修改后重新提交。",
+          });
           return;
         }
         return;
@@ -1296,19 +1331,21 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
   }, [executePendingCommand, pendingSubmission, toast]);
 
   const approvePending = useCallback(() => {
-    void executePendingCommand("approve", {
+    const feedback = pendingSubmission.trim();
+    void executePendingCommand(feedback ? `approve ${feedback}` : "approve", {
       success: "你通过了任务，棋局继续。",
-      deferSyncMessage: "你刚刚通过了对方的惩罚任务。",
+      deferSyncMessage: feedback ? `你刚刚通过了对方的惩罚任务：${feedback}` : "你刚刚通过了对方的惩罚任务。",
     });
-  }, [executePendingCommand]);
+  }, [executePendingCommand, pendingSubmission]);
 
   const rejectPending = useCallback(() => {
-    void executePendingCommand("reject", {
+    const feedback = pendingSubmission.trim();
+    void executePendingCommand(feedback ? `reject ${feedback}` : "reject", {
       success: "你打回了任务，等对方重新提交。",
       syncAfter: true,
-      syncMessage: "你打回了你的惩罚任务，请重新提交。",
+      syncMessage: feedback ? `你打回了对方的惩罚任务：${feedback}` : "你打回了对方的惩罚任务，请重新提交。",
     });
-  }, [executePendingCommand]);
+  }, [executePendingCommand, pendingSubmission]);
 
   const choosePending = useCallback((choiceId: string) => {
     const isDuel = pendingEvent?.type === "duel";
@@ -1651,6 +1688,7 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           <div className="sese-pending-modal">
             <PendingEventPanel
               pending={pendingEvent}
+              reviewFeedback={reviewFeedback}
               passCount={myPassCount}
               passSkipsUsed={passSkipsUsed}
               submission={pendingSubmission}
@@ -1735,6 +1773,14 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
             {popup.kind === "draw" ? null : <h2>{displaySystemText(popup.title)}</h2>}
             {popup.tone === "reward" && !drawRevealed ? <p>正在洗牌...</p> : popupDetailText(popup) ? <p>{popupDetailText(popup)}</p> : null}
             {popup.tone === "reward" && !drawRevealed ? null : <button type="button" onClick={closePopup}>确 认</button>}
+          </div>
+        </div>
+      ) : null}
+
+      {reviewFeedback ? (
+        <div className="sese-pending-mask" role="dialog" aria-modal="true" aria-label="验收反馈">
+          <div className="sese-pending-modal">
+            <ReviewFeedbackPanel feedback={reviewFeedback} onClose={() => setReviewFeedback(null)} />
           </div>
         </div>
       ) : null}
@@ -2657,6 +2703,19 @@ export function SeseBoardGame({ executeCommand, sendToAssistant, labels = {}, on
           font-size: 12px;
           line-height: 1.45;
           outline: none;
+        }
+        .sese-review-feedback {
+          margin-top: 8px;
+          border: 1px solid rgba(186, 104, 200, 0.24);
+          border-radius: 12px;
+          background: #fff;
+          color: var(--text-main);
+          padding: 8px 10px;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.45;
+          white-space: pre-wrap;
+          word-break: break-word;
         }
         .sese-choice-list {
           display: grid;
@@ -3828,6 +3887,7 @@ function finalNoteStatusGroups(summary: string): { label: string; values: string
 
 function PendingEventPanel({
   pending,
+  reviewFeedback,
   passCount,
   passSkipsUsed,
   submission,
@@ -3840,6 +3900,7 @@ function PendingEventPanel({
   onPass,
 }: {
   pending: PendingEvent;
+  reviewFeedback: ReviewFeedback | null;
   passCount: number;
   passSkipsUsed: number;
   submission: string;
@@ -3859,6 +3920,7 @@ function PendingEventPanel({
   const isMyTurn = currentActor === "player";
   const isMyReview = reviewer === "player";
   const hasQuestionText = Boolean(displayText(pending.question_text || "").trim());
+  const lastRejectReason = displayText(pending.last_reject_reason || "").trim();
   const canPass = isMine && pending.pass_allowed !== false && passCount > 0 && passSkipsUsed < 1 && !["submitted", "questioning"].includes(String(pending.phase || ""));
   const rawSubmissionHint = displaySystemText(pending.submission || "").trim();
   const submissionHint = /^你的回答[。.]?$/.test(rawSubmissionHint) ? "" : rawSubmissionHint;
@@ -3942,10 +4004,17 @@ function PendingEventPanel({
         </div>
         <p className="sese-submission-text">{displayText(pending.submission_text || "")}</p>
         {isMyReview ? (
-          <div className="sese-review-actions">
-            <button type="button" disabled={disabled} onClick={onApprove}>通过</button>
-            <button type="button" disabled={disabled} onClick={onReject}>打回</button>
-          </div>
+          <>
+            <textarea
+              value={submission}
+              placeholder="写一句验收反馈，会同步给对方"
+              onChange={(event) => onSubmissionChange(event.target.value)}
+            />
+            <div className="sese-review-actions">
+              <button type="button" disabled={disabled} onClick={onApprove}>通过</button>
+              <button type="button" disabled={disabled} onClick={onReject}>打回</button>
+            </div>
+          </>
         ) : (
           <div className="sese-pending-wait">
             等待对方验收你的提交。
@@ -3993,6 +4062,10 @@ function PendingEventPanel({
         <span>{isMine ? "你的惩罚任务" : "等待对方提交"}</span>
         <strong>{name}</strong>
       </div>
+      {lastRejectReason ? <div className="sese-review-feedback">打回反馈：{lastRejectReason}</div> : null}
+      {reviewFeedback && reviewFeedback.outcome === "rejected" && isMine ? (
+        <div className="sese-review-feedback">对方的反馈：{reviewFeedback.text}</div>
+      ) : null}
       {hasQuestionText ? <p className="sese-submission-text">题目：{displayText(pending.question_text)}</p> : null}
       {isMine ? (
         <>
@@ -4013,6 +4086,22 @@ function PendingEventPanel({
           <span>{waitingText}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function ReviewFeedbackPanel({ feedback, onClose }: { feedback: ReviewFeedback; onClose: () => void }) {
+  return (
+    <div className="sese-pending-card sese-review-feedback-card">
+      <div className="sese-pending-head">
+        <span>{feedback.outcome === "approved" ? "通过反馈" : "打回反馈"}</span>
+        <strong>{feedback.title}</strong>
+      </div>
+      <div className="sese-review-feedback">{feedback.text}</div>
+      <div className="sese-pending-wait">{feedback.note}</div>
+      <div className="sese-review-actions">
+        <button type="button" onClick={onClose}>知道了</button>
+      </div>
     </div>
   );
 }

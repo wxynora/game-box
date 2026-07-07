@@ -178,12 +178,15 @@ def test_review_task_submit_reject_approve() -> None:
 
     payload = run_command("reject needs more detail", save_path=path)
     assert payload["state"]["pending_event"]["phase"] == "assigned"
+    assert payload["state"]["pending_event"]["last_reject_reason"] == "needs more detail"
     assert payload["state"]["turn_actor"] == "player"
 
     run_command("submit a more detailed sample response", save_path=path)
-    payload = run_command("approve", save_path=path)
+    payload = run_command("approve looks good now", save_path=path)
     assert payload["state"]["pending_event"] is None
     assert payload["state"]["turn_actor"] == "ai"
+    result_text = "\n".join(str(payload.get(key) or "") for key in ("player_text", "ai_text", "text"))
+    assert "验收反馈：looks good now" in result_text
 
 
 def test_choice_penalty_filters_unavailable_upgrade() -> None:
@@ -397,17 +400,9 @@ def test_theme_preferred_status_pools() -> None:
     assert all(any(pattern in item for pattern in ("教室", "图书馆", "讲台")) for item in teacher_places)
     teacher_props = _theme_options_for_slot(teacher_state, "prop", list(SLOTS["prop"]["options"]))
     assert teacher_props == ["眼罩", "戒尺"]
-    teacher_tasks = _theme_options_for_slot(teacher_state, "task", list(SLOTS["task"]["options"]))
-    assert teacher_tasks
-    assert all(any(pattern in item for pattern in ("报备", "检查", "命令", "羞耻", "台词")) for item in teacher_tasks)
     assert _status_value(teacher_state, "player", "place") in teacher_places
 
-    butler_state = {"theme_profile": {"theme": "大小姐管家play"}, "statuses": {"player": [], "ai": []}, "final_note_items": [], "turn_index": 0}
-    butler_tasks = _theme_options_for_slot(butler_state, "task", list(SLOTS["task"]["options"]))
-    assert butler_tasks
-    assert all(any(pattern in item for pattern in ("伺候", "命令", "验收", "围裙", "乖", "交给对方", "听对方")) for item in butler_tasks)
-
-    assert _theme_options_for_slot({"theme_profile": {"theme": "不存在的主题"}}, "task", ["A", "B"]) == ["A", "B"]
+    assert "task" not in SLOTS
     assert set(THEME_LIMIT_OPTIONS).issubset(set(THEME_OPTION_PREFERENCES))
 
 
@@ -437,6 +432,10 @@ def test_review_penalty_pool_and_final_pose_choices() -> None:
         if has_final_material:
             assert card.get("pass_allowed") is False
             assert "惩罚" not in str(card.get("prompt") or "")
+        for choice in card.get("choices") or []:
+            effect = choice.get("effect") if isinstance(choice.get("effect"), dict) else {}
+            assert choice.get("id") != "add_task"
+            assert effect.get("slot") != "task"
     assert "浴缸骑乘" not in _filter_pose_options(list(SLOTS["pose"]["options"]))
     assert "骑乘位" in _filter_pose_options(list(SLOTS["pose"]["options"]))
 

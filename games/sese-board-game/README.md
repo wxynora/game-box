@@ -17,7 +17,7 @@
 - 真人 + AI 玩家，真人点按钮，AI 在聊天回复里发游戏指令。
 - 自己的后端已经有聊天链路，只想嵌一个小游戏。
 - 想把规则引擎接成工具调用，但前端仍然由玩家操作。
-- 想替换成自己的主题、任务、道具、状态文案。
+- 想替换成自己的主题、道具、限制、惩罚任务卡池文案。
 
 ## 项目结构
 
@@ -46,7 +46,7 @@ games/sese-board-game/
 核心文件：
 
 - `sese_board_game/engine.py`: 游戏规则、存档、命令入口。
-- `sese_board_game/cards.py`: 主题、道具、限制、任务、卡池语料。
+- `sese_board_game/cards.py`: 主题、道具、限制、惩罚任务卡池语料。
 - `sese_board_game/tool_adapter.py`: 可选工具适配层。
 - `frontend/SeseBoardGame.tsx`: 可复用 React 组件。
 - `preview_server.py`: 本地预览 API，不是生产后端。
@@ -129,6 +129,7 @@ roll
 roll 3
 submit <内容>
 approve
+approve <反馈>
 reject
 reject <原因>
 choose <选项id>
@@ -144,8 +145,8 @@ end_game
 - `roll`: 当前行动者掷骰。
 - `roll 3`: 指定骰子点数，适合测试。
 - `submit`: 提交惩罚任务、真心话回答或出题内容。
-- `approve`: 验收通过。
-- `reject`: 打回任务，对方需要重新提交。
+- `approve`: 验收通过，可写成 `approve <反馈>`。
+- `reject`: 打回任务，对方需要重新提交，可写成 `reject <原因>`。
 - `choose`: 选择惩罚、剪刀石头布出拳都走这个命令。
 - `pass`: 使用 Pass 卡跳过一个惩罚任务。
 - `append_final_status`: 终局小纸条阶段给目标玩家追加道具。
@@ -342,7 +343,7 @@ remove_final_status prop 眼罩
 4. 前端用 `payload.state` 刷新 UI。
 5. 如果轮到 AI 或需要 AI 处理任务，把 `payload["ai_text"]` 发进 AI 的下一轮上下文。
 6. AI 回复时，第一行必须是游戏指令，后面才是普通聊天。
-7. 宿主通常只解析第一行指令；唯一例外是 AI 验收通过真人任务时，可以同条回复 `【通过】` 和 `【掷骰】`，宿主应先执行 `approve` 再执行 `roll`。
+7. 宿主通常只解析第一行指令；唯一例外是 AI 验收通过真人任务时，可以同条回复 `【通过：反馈内容】` 和 `【掷骰】`，宿主应先执行 `approve <反馈内容>` 再执行 `roll`。
 8. 保存局内聊天时，把第一行指令剥掉，只保存正文。
 9. 如果执行后轮到真人，就停下来等真人。
 10. 如果 AI 因暂停状态连续无法行动，宿主可以继续执行 `roll` 消耗停步，直到轮到真人或 AI 恢复行动。
@@ -374,8 +375,8 @@ AI 回复示例：
 【真心话出题：题目内容】
 【真心话回答：回答内容】
 【描述：提交内容】
-【通过】
-【打回】
+【通过：反馈内容】
+【打回：反馈内容】
 【Pass】
 ```
 
@@ -384,8 +385,9 @@ AI 回复示例：
 - `【提交】` 后面的正文会作为 `submit <正文>`。
 - `【真心话出题：...】` 和 `【真心话回答：...】` 会作为 `submit ...`，用于真心话出题和回答。
 - `【描述：...】` 只用于需要长篇正文的提交类惩罚，例如 `反向诱惑`、`全部暴露！`、`羞耻台词大放送`、`自慰陈述`。
-- `【打回】` 会作为 `reject`；打回后对方需要重新提交，不掷骰。
-- AI 验收真人提交时，如果通过，应回复两行：第一行 `【通过】`，第二行 `【掷骰】`；宿主先执行 `approve`，再执行 `roll`。
+- `【描述：...】`、`【真心话出题：...】`、`【真心话回答：...】` 可以跨多行；宿主应把后续正文一并作为提交内容，并剥掉末尾的 `】`。
+- `【打回：...】` 会作为 `reject ...`；打回后对方需要重新提交，不掷骰。
+- AI 验收真人提交时，如果通过，应回复两行：第一行 `【通过：反馈内容】`，第二行 `【掷骰】`；宿主先执行 `approve <反馈内容>`，再执行 `roll`。
 - `【选择：...】` 会作为 `choose ...`。
 - `【剪刀石头布：...】` 也是 `choose ...`，只是用于对抗事件。
 
@@ -430,10 +432,10 @@ def handle_ai_message(content, save_path):
         command = "submit " + first_line.removeprefix("【描述：").removesuffix("】").strip()
     elif first_line == "【提交】":
         command = "submit " + chat_text
-    elif first_line == "【通过】":
-        command = "approve"
-    elif first_line == "【打回】":
-        command = "reject " + chat_text if chat_text else "reject"
+    elif first_line.startswith("【通过：") and first_line.endswith("】"):
+        command = "approve " + first_line.removeprefix("【通过：").removesuffix("】").strip()
+    elif first_line.startswith("【打回：") and first_line.endswith("】"):
+        command = "reject " + first_line.removeprefix("【打回：").removesuffix("】").strip()
     elif first_line in {"【Pass】", "【PASS】"}:
         command = "pass"
 
@@ -442,7 +444,7 @@ def handle_ai_message(content, save_path):
         return run_command("status", save_path=save_path)
 
     payload = run_command(command, save_path=save_path)
-    if first_line == "【通过】" and "【掷骰】" in other_lines and payload["state"]["turn_actor"] == "ai":
+    if first_line.startswith("【通过：") and "【掷骰】" in other_lines and payload["state"]["turn_actor"] == "ai":
         payload = run_command("roll", save_path=save_path)
     if chat_text:
         save_ingame_chat(chat_text)
@@ -451,7 +453,7 @@ def handle_ai_message(content, save_path):
 
 关键点：
 
-- 一条 AI 消息通常只执行一个游戏命令；唯一例外是 `【通过】` 后同条带 `【掷骰】`。
+- 一条 AI 消息通常只执行一个游戏命令；唯一例外是 `【通过：反馈内容】` 后同条带 `【掷骰】`。
 - 命令行要剥离，避免污染局内聊天。
 - `payload["ai_text"]` 是游戏上下文，不等于普通聊天历史。
 - 游戏日志、状态、棋盘 JSON 不要归档进普通近期记忆。

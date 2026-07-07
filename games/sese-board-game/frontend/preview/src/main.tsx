@@ -30,7 +30,7 @@ function fakeAssistant(payload: SeseBoardPayload, context: AssistantContext): st
     if (pending.phase === "questioning") {
       return "【提交】\n【描述：你现在最想知道对方哪件没说出口的事？】";
     }
-    if (pending.phase === "submitted") return "【通过】\n【描述：预览对方通过。】";
+    if (pending.phase === "submitted") return "【通过：预览对方通过。】\n【掷骰】";
     return "【提交】\n【描述：我按当前主题完成了任务，提交给对方验收。】";
   }
   if (payload.state?.turn_actor === "ai") return "【掷骰】\n【描述：预览对方掷骰。】";

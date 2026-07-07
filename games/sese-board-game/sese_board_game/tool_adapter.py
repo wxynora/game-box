@@ -21,14 +21,14 @@ def get_tools_for_inject() -> list[dict[str, Any]]:
                 "name": TOOL_NAME,
                 "description": (
                     "执行涩涩走格棋的一步命令，并返回棋盘、公开状态、待处理事件和玩家可读文本。"
-                    "可用命令：status、new_game、roll、roll 3、submit <内容>、approve、reject、choose <选项id>、pass、end_game。"
+                    "可用命令：status、new_game、roll、roll 3、submit <内容>、approve [反馈]、reject [理由]、choose <选项id>、pass、end_game。"
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "command": {
                             "type": "string",
-                            "description": "游戏命令，例如：status、roll、submit <内容>、approve、choose add_prop、pass、new_game。",
+                            "description": "游戏命令，例如：status、roll、submit <内容>、approve 做得不错、choose add_prop、pass、new_game。",
                         },
                         "save_path": {
                             "type": "string",

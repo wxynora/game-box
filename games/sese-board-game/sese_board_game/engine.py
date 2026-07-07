@@ -90,7 +90,7 @@ FINAL_APPEND_SLOT_ALIASES = {
 DEFAULT_SAVE_PATH = Path(os.environ.get("SESE_BOARD_GAME_SAVE", ".sese_board_game.json"))
 ACTORS = ("player", "ai")
 DEFAULT_LABELS = {"player": "你", "ai": "对方"}
-COMMAND_HINT = "可用命令：status / new_game / roll / roll 3 / submit <内容> / approve / reject [理由] / choose <选项> / 剪刀石头布: 石头 / pass / end_game"
+COMMAND_HINT = "可用命令：status / new_game / roll / roll 3 / submit <内容> / approve [反馈] / reject [理由] / choose <选项> / 剪刀石头布: 石头 / pass / end_game"
 RPS_CHOICES = (
     {"id": "rock", "label": "石头"},
     {"id": "scissors", "label": "剪刀"},
@@ -133,8 +133,6 @@ def _status_title(item: dict[str, Any]) -> str:
         return "道具惩罚"
     if slot == "limit":
         return "限制"
-    if slot == "task":
-        return "任务状态"
     if slot == "pose":
         return "最终姿势"
     if slot == "place":
@@ -370,6 +368,8 @@ def _normalize_final_append_durations(state: dict[str, Any], target: str) -> Non
 
 
 def _status_item_allowed(item: dict[str, Any]) -> bool:
+    if str(item.get("slot") or "").strip() == "task":
+        return False
     if str(item.get("slot") or "") != "prop":
         return True
     return str(item.get("value") or "").strip() not in INVALID_PROP_VALUES
@@ -525,7 +525,7 @@ def _run_on_state(state: dict[str, Any], command: str, labels: dict[str, str]) -
     if verb == "submit":
         return _submit(state, args, labels)
     if verb == "approve":
-        return _approve(state, labels)
+        return _approve(state, args, labels)
     if verb == "reject":
         return _reject(state, args, labels)
     if verb == "choose":
@@ -1237,7 +1237,7 @@ def _submit(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[st
     return _payload(state, "submit", intro, labels)
 
 
-def _approve(state: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
+def _approve(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[str, Any]:
     pending = state.get("pending_event")
     if not pending or pending.get("type") != "review":
         return _payload(state, "approve", "当前没有待验收任务。", labels, ok=False)
@@ -1249,7 +1249,17 @@ def _approve(state: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     state["pending_event"] = None
     state["turn_actor"] = pending.get("next_actor_after_event") or _other(actor)
     _log(state, reviewer, intro)
-    return _payload(state, "approve", _compact_text([intro, f"下一次行动：{_actor_label(state['turn_actor'], labels)}。"]), labels)
+    feedback = str(args or "").strip()
+    return _payload(
+        state,
+        "approve",
+        _compact_text([
+            intro,
+            f"验收反馈：{feedback}" if feedback else "",
+            f"下一次行动：{_actor_label(state['turn_actor'], labels)}。",
+        ]),
+        labels,
+    )
 
 
 def _reject(state: dict[str, Any], args: str, labels: dict[str, str]) -> dict[str, Any]:
