@@ -6,6 +6,7 @@
   "tool_adapter": "sese_board_game.tool_adapter",
   "mcp_server": "sese_board_game.mcp_server",
   "mcp_preview_server": "mcp_preview_server.py",
+  "mcp_preview_script": "scripts/start-mcp-preview.sh",
   "frontend": "frontend/SeseBoardGame.tsx",
   "license": "MIT",
   "features": [
@@ -18,6 +19,7 @@
     "status tracking",
     "optional React UI",
     "optional MCP stdio server",
-    "optional MCP HTTP preview bridge"
+    "optional MCP HTTP preview bridge",
+    "one-command MCP frontend preview"
   ]
 }

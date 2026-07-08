@@ -75,7 +75,20 @@ type SeseBoardGameProps = {
 frontend/preview
 ```
 
-启动方式：
+最省事的 MCP 前端预览：
+
+```bash
+cd games/sese-board-game
+./scripts/start-mcp-preview.sh
+```
+
+脚本会同时启动 MCP HTTP bridge 和 Vite。打开：
+
+```text
+http://127.0.0.1:5176/
+```
+
+如果只想启动普通 Python 预览 API，可以手动运行：
 
 ```bash
 cd games/sese-board-game

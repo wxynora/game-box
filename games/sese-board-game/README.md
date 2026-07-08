@@ -27,6 +27,8 @@ games/sese-board-game/
   manifest.json
   mcp_preview_server.py
   preview_server.py
+  scripts/
+    start-mcp-preview.sh
   sese_board_game/
     __init__.py
     cards.py
@@ -56,8 +58,32 @@ games/sese-board-game/
 - `frontend/SeseBoardGame.tsx`: 可复用 React 组件。
 - `preview_server.py`: 本地预览 API，不是生产后端。
 - `mcp_preview_server.py`: 通过 MCP stdio 调游戏工具的本地预览 API。
+- `scripts/start-mcp-preview.sh`: 一条命令启动 MCP bridge 和前端预览。
 
 ## 本地预览
+
+最省事的 MCP 前端预览：
+
+```bash
+cd games/sese-board-game
+./scripts/start-mcp-preview.sh
+```
+
+脚本会启动：
+
+```text
+React UI -> /command HTTP bridge -> MCP stdio tools/call -> run_command()
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:5176/
+```
+
+如果 `8766` 已经被旧的 `preview_server.py` 或其他服务占用，先关掉那个服务再重试。
+
+普通 Python 预览 API 也可以手动启动：
 
 在游戏目录启动 Python 预览 API：
 
@@ -635,7 +661,14 @@ MCP server 暴露：
 
 ### 前端通过 MCP 预览
 
-浏览器不能直接连接 stdio MCP。要让开源 React 预览也走 MCP，可以启动本包附带的 HTTP bridge：
+浏览器不能直接连接 stdio MCP。要让开源 React 预览也走 MCP，推荐用一条命令启动：
+
+```bash
+cd games/sese-board-game
+./scripts/start-mcp-preview.sh
+```
+
+也可以手动启动本包附带的 HTTP bridge：
 
 ```bash
 cd games/sese-board-game
