@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 import sys
@@ -8,6 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sese_board_game.cards import CHOICE_PENALTY_CARDS, DEFAULT_LIMIT_OPTIONS, REVIEW_PENALTY_CARDS, SLOTS, THEME_LIMIT_OPTIONS, THEME_OPTION_PREFERENCES, THEMES
 from sese_board_game.engine import _available_choices, _filter_pose_options, _limit_options_for_theme, _status_options_for_actor, _status_value, _theme_options_for_slot, build_cell_events, run_command
+from sese_board_game.mcp_server import RESOURCE_URI, handle_request
 from sese_board_game.tool_adapter import execute_tool
 
 
@@ -721,6 +723,66 @@ def test_tool_adapter_returns_ai_readable_text_not_json() -> None:
     assert "轮到：对方" in text
 
 
+def test_mcp_server_lists_existing_game_tool() -> None:
+    response = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+    assert response is not None
+    tools = response["result"]["tools"]
+    assert tools[0]["name"] == "sese_board_game"
+    assert tools[0]["inputSchema"]["required"] == ["command"]
+
+
+def test_mcp_server_calls_game_tool_with_structured_payload() -> None:
+    path = save_path()
+    response = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "sese_board_game",
+                "arguments": {"command": "new_game seed=mcp", "save_path": str(path)},
+            },
+        }
+    )
+    assert response is not None
+    result = response["result"]
+    assert result["content"][0]["type"] == "text"
+    assert result["content"][0]["text"]
+    assert result["structuredContent"]["ok"] is True
+    assert result["structuredContent"]["state"]["positions"] == {"player": 0, "ai": 0}
+    assert path.exists()
+
+
+def test_mcp_server_reads_default_save_resource() -> None:
+    path = save_path()
+    original_save_path = os.environ.get("SESE_BOARD_GAME_SAVE")
+    os.environ["SESE_BOARD_GAME_SAVE"] = str(path)
+    try:
+        handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "sese_board_game", "arguments": {"command": "new_game seed=mcp-resource"}},
+            }
+        )
+        response = handle_request(
+            {"jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": {"uri": RESOURCE_URI}}
+        )
+    finally:
+        if original_save_path is None:
+            os.environ.pop("SESE_BOARD_GAME_SAVE", None)
+        else:
+            os.environ["SESE_BOARD_GAME_SAVE"] = original_save_path
+
+    assert response is not None
+    contents = response["result"]["contents"]
+    assert contents[0]["mimeType"] == "application/json"
+    payload = json.loads(contents[0]["text"])
+    assert payload["ok"] is True
+    assert payload["state"]["positions"] == {"player": 0, "ai": 0}
+
+
 if __name__ == "__main__":
     test_new_game_and_manual_roll()
     test_reset_self_cell()
@@ -744,4 +806,7 @@ if __name__ == "__main__":
     test_player_winner_can_append_final_status()
     test_ended_save_migration_creates_final_note()
     test_tool_adapter_returns_ai_readable_text_not_json()
+    test_mcp_server_lists_existing_game_tool()
+    test_mcp_server_calls_game_tool_with_structured_payload()
+    test_mcp_server_reads_default_save_resource()
     print("ok")

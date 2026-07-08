@@ -30,6 +30,7 @@ games/sese-board-game/
     __init__.py
     cards.py
     engine.py
+    mcp_server.py
     tool_adapter.py
   frontend/
     README.md
@@ -48,6 +49,7 @@ games/sese-board-game/
 - `sese_board_game/engine.py`: 游戏规则、存档、命令入口。
 - `sese_board_game/cards.py`: 主题、道具、限制、惩罚任务卡池语料。
 - `sese_board_game/tool_adapter.py`: 可选工具适配层。
+- `sese_board_game/mcp_server.py`: 可选 MCP stdio 连接入口。
 - `frontend/SeseBoardGame.tsx`: 可复用 React 组件。
 - `preview_server.py`: 本地预览 API，不是生产后端。
 
@@ -579,6 +581,60 @@ text_for_ai = execute_tool({
 - 工具循环要小心结束条件。不要让 AI 连续工具调用把真人回合吃掉。
 - 对真人玩家来说，前端按钮才是主要操作入口。
 
+## 可选 MCP stdio 连接
+
+MCP 是另一种连接方式，不替换上面的 `run_command()`、HTTP 示例、前端按钮或 `tool_adapter.py`。
+
+本包内置一个无额外依赖的 stdio MCP server：
+
+```bash
+cd games/sese-board-game
+python3 -m sese_board_game.mcp_server
+```
+
+客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "sese-board-game": {
+      "command": "python3",
+      "args": ["-m", "sese_board_game.mcp_server"],
+      "cwd": "/absolute/path/to/games/sese-board-game",
+      "env": {
+        "SESE_BOARD_GAME_SAVE": "/absolute/path/to/sese-board-save.json"
+      }
+    }
+  }
+}
+```
+
+MCP server 暴露：
+
+- 工具：`sese_board_game`
+- 参数：`command`，可选 `save_path`
+- 资源：`sese-board-game://save/default`，读取默认存档的 `status` payload
+
+调用示例：
+
+```json
+{
+  "name": "sese_board_game",
+  "arguments": {
+    "command": "roll",
+    "save_path": "./demo-game.json"
+  }
+}
+```
+
+工具返回给模型看的文本，同时在 `structuredContent` 里带完整 `run_command()` payload，方便支持结构化结果的 MCP 客户端刷新 UI 或调试状态。
+
+注意：
+
+- stdio 模式下 stdout 只输出 MCP JSON-RPC 消息；调试日志请写 stderr。
+- 默认存档路径仍然遵循 `SESE_BOARD_GAME_SAVE`，没有设置时使用当前目录下的 `.sese_board_game.json`。
+- MCP 客户端直接调用工具时，仍要由宿主控制回合边界，避免 AI 连续调用吞掉真人回合。
+
 ## 内容包怎么改
 
 主要改 `sese_board_game/cards.py`。
@@ -616,6 +672,7 @@ python3 games/sese-board-game/tests/test_engine.py
 python3 -m py_compile \
   games/sese-board-game/sese_board_game/engine.py \
   games/sese-board-game/sese_board_game/cards.py \
+  games/sese-board-game/sese_board_game/mcp_server.py \
   games/sese-board-game/sese_board_game/tool_adapter.py \
   games/sese-board-game/preview_server.py
 ```

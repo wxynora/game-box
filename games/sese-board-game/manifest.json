@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "entrypoint": "sese_board_game.engine:cmd",
   "tool_adapter": "sese_board_game.tool_adapter",
+  "mcp_server": "sese_board_game.mcp_server",
   "frontend": "frontend/SeseBoardGame.tsx",
   "license": "MIT",
   "features": [
@@ -14,6 +15,7 @@
     "review penalties",
     "choice penalties",
     "status tracking",
-    "optional React UI"
+    "optional React UI",
+    "optional MCP stdio server"
   ]
 }
