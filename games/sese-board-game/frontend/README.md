@@ -96,6 +96,15 @@ npm run dev
 http://127.0.0.1:5176/
 ```
 
+如果要测试“前端 -> HTTP bridge -> MCP stdio -> 游戏引擎”这条链路，把第一步换成：
+
+```bash
+cd games/sese-board-game
+python3 mcp_preview_server.py
+```
+
+前端代码不用改，仍然请求 `http://127.0.0.1:8766/command`。
+
 如果你不想重复安装 React/Vite，可以复用已有 `node_modules`：
 
 ```bash

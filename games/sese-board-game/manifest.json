@@ -5,6 +5,7 @@
   "entrypoint": "sese_board_game.engine:cmd",
   "tool_adapter": "sese_board_game.tool_adapter",
   "mcp_server": "sese_board_game.mcp_server",
+  "mcp_preview_server": "mcp_preview_server.py",
   "frontend": "frontend/SeseBoardGame.tsx",
   "license": "MIT",
   "features": [
@@ -16,6 +17,7 @@
     "choice penalties",
     "status tracking",
     "optional React UI",
-    "optional MCP stdio server"
+    "optional MCP stdio server",
+    "optional MCP HTTP preview bridge"
   ]
 }

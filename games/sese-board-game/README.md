@@ -25,12 +25,14 @@
 games/sese-board-game/
   README.md
   manifest.json
+  mcp_preview_server.py
   preview_server.py
   sese_board_game/
     __init__.py
     cards.py
     engine.py
     mcp_server.py
+    mcp_stdio_client.py
     tool_adapter.py
   frontend/
     README.md
@@ -50,8 +52,10 @@ games/sese-board-game/
 - `sese_board_game/cards.py`: 主题、道具、限制、惩罚任务卡池语料。
 - `sese_board_game/tool_adapter.py`: 可选工具适配层。
 - `sese_board_game/mcp_server.py`: 可选 MCP stdio 连接入口。
+- `sese_board_game/mcp_stdio_client.py`: 可选 MCP stdio 客户端辅助函数。
 - `frontend/SeseBoardGame.tsx`: 可复用 React 组件。
 - `preview_server.py`: 本地预览 API，不是生产后端。
+- `mcp_preview_server.py`: 通过 MCP stdio 调游戏工具的本地预览 API。
 
 ## 本地预览
 
@@ -629,6 +633,36 @@ MCP server 暴露：
 
 工具返回给模型看的文本，同时在 `structuredContent` 里带完整 `run_command()` payload，方便支持结构化结果的 MCP 客户端刷新 UI 或调试状态。
 
+### 前端通过 MCP 预览
+
+浏览器不能直接连接 stdio MCP。要让开源 React 预览也走 MCP，可以启动本包附带的 HTTP bridge：
+
+```bash
+cd games/sese-board-game
+python3 mcp_preview_server.py
+```
+
+然后照常启动前端：
+
+```bash
+cd games/sese-board-game/frontend/preview
+npm run dev
+```
+
+前端仍然请求：
+
+```text
+http://127.0.0.1:8766/command
+```
+
+但这时链路变成：
+
+```text
+React UI -> /command HTTP bridge -> MCP stdio tools/call -> run_command()
+```
+
+这个 bridge 只是本地接入示例，保留原来的前端 `executeCommand(command)` 形态。生产里可以自己把同样的 HTTP API 接到常驻 MCP client、队列或后端会话里。
+
 注意：
 
 - stdio 模式下 stdout 只输出 MCP JSON-RPC 消息；调试日志请写 stderr。
@@ -673,8 +707,10 @@ python3 -m py_compile \
   games/sese-board-game/sese_board_game/engine.py \
   games/sese-board-game/sese_board_game/cards.py \
   games/sese-board-game/sese_board_game/mcp_server.py \
+  games/sese-board-game/sese_board_game/mcp_stdio_client.py \
   games/sese-board-game/sese_board_game/tool_adapter.py \
-  games/sese-board-game/preview_server.py
+  games/sese-board-game/preview_server.py \
+  games/sese-board-game/mcp_preview_server.py
 ```
 
 前端预览转换检查：

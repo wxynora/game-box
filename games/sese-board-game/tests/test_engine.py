@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sese_board_game.cards import CHOICE_PENALTY_CARDS, DEFAULT_LIMIT_OPTIONS, REVIEW_PENALTY_CARDS, SLOTS, THEME_LIMIT_OPTIONS, THEME_OPTION_PREFERENCES, THEMES
 from sese_board_game.engine import _available_choices, _filter_pose_options, _limit_options_for_theme, _status_options_for_actor, _status_value, _theme_options_for_slot, build_cell_events, run_command
 from sese_board_game.mcp_server import RESOURCE_URI, handle_request
+from sese_board_game.mcp_stdio_client import call_stdio_tool
 from sese_board_game.tool_adapter import execute_tool
 
 
@@ -783,6 +784,16 @@ def test_mcp_server_reads_default_save_resource() -> None:
     assert payload["state"]["positions"] == {"player": 0, "ai": 0}
 
 
+def test_mcp_stdio_client_returns_frontend_payload() -> None:
+    path = save_path()
+    cwd = Path(__file__).resolve().parents[1]
+    payload = call_stdio_tool("new_game seed=mcp-frontend", save_path=path, cwd=cwd)
+    assert payload["ok"] is True
+    assert payload["state"]["positions"] == {"player": 0, "ai": 0}
+    assert payload["board"]["size"] == 36
+    assert path.exists()
+
+
 if __name__ == "__main__":
     test_new_game_and_manual_roll()
     test_reset_self_cell()
@@ -809,4 +820,5 @@ if __name__ == "__main__":
     test_mcp_server_lists_existing_game_tool()
     test_mcp_server_calls_game_tool_with_structured_payload()
     test_mcp_server_reads_default_save_resource()
+    test_mcp_stdio_client_returns_frontend_payload()
     print("ok")
