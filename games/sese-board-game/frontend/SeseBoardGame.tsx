@@ -4026,6 +4026,7 @@ function PendingEventPanel({
   const hasQuestionText = Boolean(displayText(pending.question_text || "").trim());
   const lastRejectReason = displayText(pending.last_reject_reason || "").trim();
   const canPass = isMine && pending.pass_allowed !== false && passCount > 0 && passSkipsUsed < 1 && !["submitted", "questioning"].includes(String(pending.phase || ""));
+  const taskText = displaySystemText(pending.task || "").trim();
   const rawSubmissionHint = displaySystemText(pending.submission || "").trim();
   const submissionHint = /^你的回答[。.]?$/.test(rawSubmissionHint) ? "" : rawSubmissionHint;
   const [selectedRps, setSelectedRps] = useState("");
@@ -4106,6 +4107,8 @@ function PendingEventPanel({
           <span>{isMyReview ? "需要你验收" : "等待对方验收"}</span>
           <strong>{name}</strong>
         </div>
+        {taskText ? <p>{taskText}</p> : null}
+        {submissionHint ? <div className="sese-pending-tip">提交要求：{submissionHint}</div> : null}
         <p className="sese-submission-text">{displayText(pending.submission_text || "")}</p>
         {isMyReview ? (
           <>
@@ -4137,6 +4140,7 @@ function PendingEventPanel({
           <span>{isMyReview ? "你来出题" : "等待对方出题"}</span>
           <strong>{name}</strong>
         </div>
+        {taskText ? <p>{taskText}</p> : null}
         {isMyReview ? (
           <>
             <p>{questionPrompt}</p>
@@ -4171,10 +4175,10 @@ function PendingEventPanel({
         <div className="sese-review-feedback">对方的反馈：{reviewFeedback.text}</div>
       ) : null}
       {hasQuestionText ? <p className="sese-submission-text">题目：{displayText(pending.question_text)}</p> : null}
+      {taskText ? <p>{taskText}</p> : null}
+      {submissionHint ? <div className="sese-pending-tip">提交要求：{submissionHint}</div> : null}
       {isMine ? (
         <>
-          {!hasQuestionText ? <p>{displaySystemText(pending.task || "")}</p> : null}
-          {!hasQuestionText && submissionHint ? <div className="sese-pending-tip">提交要求：{submissionHint}</div> : null}
           <textarea
             value={submission}
             placeholder={hasQuestionText ? "在这里写回答" : "在这里写提交内容"}
