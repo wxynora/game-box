@@ -771,4 +771,6 @@ curl -s -o /tmp/sese-board-component.js \
 
 ## License
 
-MIT
+PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`).
+
+仅允许协议规定的非商业用途；不授予任何商业使用权限。完整条款见仓库根目录 [`LICENSE`](../../LICENSE)。

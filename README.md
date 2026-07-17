@@ -39,4 +39,6 @@ using its tool adapter.
 
 ## License
 
-MIT
+PolyForm Noncommercial License 1.0.0 (`PolyForm-Noncommercial-1.0.0`).
+
+The source is available for permitted noncommercial purposes only. Commercial use is not licensed. See [`LICENSE`](LICENSE) for the full terms.
